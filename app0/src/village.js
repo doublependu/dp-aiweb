@@ -1,6 +1,6 @@
-import { TAU, rng } from './core/math.js';
-import { PB, pv, pq, pt3, pbox, pcyl, proof, finishPainted, LC, tint, mixc } from './core/mesh-utils.js';
-import { VILLAGE, riverField, waterLevel, RIVER_PTS, sampleHeight } from './terrain.js';
+import { TAU, rng, clamp } from './core/math.js';
+import { PB, pv, pq, pt3, pbox, pcyl, proof, finishPainted, LC, tint, mixc, rotY} from './core/mesh-utils.js';
+import { VILLAGE, riverField, waterLevel, RIVER_PTS, sampleHeight, riverWidth } from './terrain.js';
 import { pushSolid } from './world.js';
 
 export function buildVillage(){

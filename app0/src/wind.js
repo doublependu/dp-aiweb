@@ -1,6 +1,7 @@
 import { CFG } from './core/config.js';
 import { DEG, clamp, smoothstep, noise2, rng } from './core/math.js';
 import { GL_UNI, GL_HASH, GL_NOISE, GL_TERRAIN } from './core/glsl.js';
+import * as THREE from 'three';
 
 /*───────────────────────────── §5  THE WIND ─────────────────────────────────*/
 /*  Real wind is not sin(t).  It is a mean flow with a slowly-meandering

@@ -1,6 +1,7 @@
 import { TAU, clamp, rng } from './core/math.js';
 import { riverField, riverWidth, RIVER_PTS } from './terrain.js';
 import { windAtJS } from './wind.js';
+import * as THREE from 'three';
 
 /*──────────────────────── §14  AUDIO — ALL SYNTHESISED ─────────────────────*/
 /* No samples.  Noise buffers, oscillators, biquads, and one convolution
