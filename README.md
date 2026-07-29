@@ -2,13 +2,21 @@
 ai generated web apps
 
 
+## Setup
+
+```bash
+npm install 
+npm run dev
+```
 
 
-## Start with 
+## Start new app with 
 
 ```bash
 npm create vite@latest <project name> -- --template vanilla
 ```
+
+
 
 
 
