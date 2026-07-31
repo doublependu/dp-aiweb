@@ -1,0 +1,872 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>A Field of Corn — a wander</title>
+<style>
+  html, body { margin:0; padding:0; overflow:hidden; height:100%; background:#2a2210;
+               font-family: Georgia, 'Iowan Old Style', serif; }
+  canvas { display:block; }
+
+  #vignette {
+    position:fixed; inset:0; pointer-events:none; z-index:4;
+    background: radial-gradient(ellipse at 50% 50%, rgba(0,0,0,0) 42%, rgba(45,28,6,0.42) 100%);
+  }
+
+  #overlay {
+    position:fixed; inset:0; z-index:10;
+    display:flex; align-items:center; justify-content:center; flex-direction:column;
+    background: radial-gradient(ellipse at center, #57421c 0%, #1d1608 100%);
+    background: radial-gradient(ellipse at center, #57421c 0%, #1d1608 100%);
+    color:#f7ebcb; text-align:center; padding:24px; box-sizing:border-box;
+    transition: opacity 1.6s ease;
+  }
+  #overlay h1 { font-weight:400; font-size:2.2em; letter-spacing:0.05em; margin:0 0 0.35em; }
+  #overlay p  { font-size:1.05em; color:#dcc99c; max-width:430px; line-height:1.6; margin:0 0 1.8em; }
+  #enterBtn {
+    padding:0.85em 2em; font-size:1.05em; font-family:inherit; letter-spacing:0.04em;
+    background:#cfa04a; color:#3a2a10; border:none; border-radius:32px; cursor:pointer;
+    box-shadow:0 4px 20px rgba(207,160,74,0.38);
+    transition: transform .2s ease, box-shadow .2s ease;
+  }
+  #enterBtn:hover { transform:translateY(-2px); box-shadow:0 7px 26px rgba(207,160,74,0.55); }
+  #enterBtn:focus-visible { outline:2px solid #f7ebcb; outline-offset:3px; }
+  .fadeOut { opacity:0; pointer-events:none; }
+
+  #hud {
+    position:fixed; left:0; right:0; bottom:0; z-index:5;
+    display:flex; justify-content:space-between; align-items:flex-end; gap:16px;
+    padding:18px 22px; box-sizing:border-box; pointer-events:none;
+    color:#f7ebcb; text-shadow:0 1px 5px rgba(0,0,0,0.65);
+  }
+  #hud .kernels { font-size:0.95em; opacity:0.85; }
+  #hud .hint    { font-size:0.82em; opacity:0.55; text-align:right; line-height:1.5; }
+
+  #toast {
+    position:fixed; top:13%; left:50%; transform:translateX(-50%);
+    color:#fcf0cd; font-size:1.15em; text-shadow:0 2px 12px rgba(0,0,0,0.75);
+    opacity:0; transition:opacity 1.8s ease; pointer-events:none; z-index:6;
+    text-align:center; max-width:80%; line-height:1.5;
+  }
+
+  #soundToggle {
+    position:fixed; top:18px; right:18px; z-index:6;
+    background:rgba(32,24,8,0.42); border:1px solid rgba(247,235,203,0.32); color:#f7ebcb;
+    border-radius:20px; padding:7px 15px; font-family:inherit; font-size:0.8em; cursor:pointer;
+    backdrop-filter: blur(4px);
+  }
+  #soundToggle:focus-visible { outline:2px solid #f7ebcb; outline-offset:2px; }
+</style>
+</head>
+<body>
+
+<div id="overlay">
+  <h1>A Field of Corn</h1>
+  <p>No score, no clock, no wrong way to go.<br>Walk. Listen. Follow a firefly if one drifts past.</p>
+  <button id="enterBtn">Step into the corn</button>
+</div>
+
+<div id="vignette"></div>
+
+<div id="hud" style="display:none;">
+  <div class="kernels" id="kernelCount">kernels found: 0</div>
+  <div class="hint">W/S walk &middot; A/D step sideways<br>&larr; &rarr; turn &middot; or drag to look</div>
+</div>
+
+<div id="toast"></div>
+<button id="soundToggle" style="display:none;">&#128266; sound on</button>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
+<script>
+(function () {
+  "use strict";
+
+  if (!window.THREE) {
+    document.getElementById('overlay').innerHTML =
+      '<h1>Could not load three.js</h1><p>Check your internet connection and reload.</p>';
+    return;
+  }
+
+  var reduceMotion = window.matchMedia &&
+                     window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  // =============================================================
+  // SCENE / RENDERER
+  // =============================================================
+  var scene = new THREE.Scene();
+  var HAZE = 0xE9CB8A;
+  scene.fog = new THREE.FogExp2(HAZE, 0.020);
+
+  var camera = new THREE.PerspectiveCamera(64, window.innerWidth / window.innerHeight, 0.1, 500);
+
+  var renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.setClearColor(HAZE);
+  document.body.appendChild(renderer.domElement);
+
+  var maxAniso = renderer.capabilities.getMaxAnisotropy();
+
+  window.addEventListener('resize', function () {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+  });
+
+  // =============================================================
+  // SKY
+  // =============================================================
+  var sky = new THREE.Mesh(
+    new THREE.SphereGeometry(320, 24, 16),
+    new THREE.ShaderMaterial({
+      side: THREE.BackSide,
+      depthWrite: false,
+      uniforms: {
+        cTop:    { value: new THREE.Color(0x7ea9d6) },
+        cMid:    { value: new THREE.Color(0xf2cb8b) },
+        cBottom: { value: new THREE.Color(0xf7e4b6) }
+      },
+      vertexShader: [
+        'varying vec3 vPos;',
+        'void main() {',
+        '  vPos = position;',
+        '  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);',
+        '}'
+      ].join('\n'),
+      fragmentShader: [
+        'varying vec3 vPos;',
+        'uniform vec3 cTop; uniform vec3 cMid; uniform vec3 cBottom;',
+        'void main() {',
+        '  float h = normalize(vPos).y;',
+        '  vec3 col = h > 0.0',
+        '    ? mix(cMid, cTop, smoothstep(0.0, 0.55, h))',
+        '    : mix(cMid, cBottom, smoothstep(0.0, -0.25, h));',
+        '  gl_FragColor = vec4(col, 1.0);',
+        '}'
+      ].join('\n')
+    })
+  );
+  sky.frustumCulled = false;
+  scene.add(sky);
+
+  // =============================================================
+  // LIGHT — low, warm, late afternoon
+  // =============================================================
+  var sun = new THREE.DirectionalLight(0xffd79a, 1.25);
+  sun.position.set(-60, 26, 34);
+  scene.add(sun);
+  scene.add(new THREE.HemisphereLight(0xb8d2ef, 0x6d5327, 0.62));
+  scene.add(new THREE.AmbientLight(0xffeac4, 0.30));
+
+  (function sunGlow() {
+    var c = document.createElement('canvas'); c.width = c.height = 128;
+    var g = c.getContext('2d');
+    var grad = g.createRadialGradient(64, 64, 0, 64, 64, 64);
+    grad.addColorStop(0.0, 'rgba(255,244,214,0.95)');
+    grad.addColorStop(0.35, 'rgba(255,226,168,0.40)');
+    grad.addColorStop(1.0, 'rgba(255,226,168,0)');
+    g.fillStyle = grad; g.fillRect(0, 0, 128, 128);
+    var spr = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: new THREE.CanvasTexture(c), transparent: true,
+      depthWrite: false, blending: THREE.AdditiveBlending, fog: false
+    }));
+    spr.scale.set(90, 90, 1);
+    spr.position.copy(sun.position).multiplyScalar(3.2);
+    scene.add(spr);
+  })();
+
+  // =============================================================
+  // MAZE — recursive backtracker on a room grid
+  // =============================================================
+  var ROOMS = 9;
+  var FINE  = ROOMS * 2 + 1;
+  var CELL  = 3.2;
+
+  var isOpen = [];
+  for (var i = 0; i < FINE; i++) {
+    isOpen.push(new Array(FINE).fill(false));
+  }
+  for (var rx = 0; rx < ROOMS; rx++) {
+    for (var ry = 0; ry < ROOMS; ry++) isOpen[rx * 2 + 1][ry * 2 + 1] = true;
+  }
+
+  (function carve() {
+    var seen = [];
+    for (var a = 0; a < ROOMS; a++) seen.push(new Array(ROOMS).fill(false));
+    var stack = [[0, 0]];
+    seen[0][0] = true;
+    while (stack.length) {
+      var cur = stack[stack.length - 1];
+      var cxr = cur[0], cyr = cur[1];
+      var opts = [[1,0],[-1,0],[0,1],[0,-1]].filter(function (d) {
+        var nx = cxr + d[0], ny = cyr + d[1];
+        return nx >= 0 && ny >= 0 && nx < ROOMS && ny < ROOMS && !seen[nx][ny];
+      });
+      if (!opts.length) { stack.pop(); continue; }
+      var d2 = opts[(Math.random() * opts.length) | 0];
+      seen[cxr + d2[0]][cyr + d2[1]] = true;
+      isOpen[cxr * 2 + 1 + d2[0]][cyr * 2 + 1 + d2[1]] = true;
+      stack.push([cxr + d2[0], cyr + d2[1]]);
+    }
+  })();
+
+  // A few extra openings create loops — dead ends are stressful, loops are calming.
+  for (var loop = 0; loop < 7; loop++) {
+    var lx = 1 + ((Math.random() * (FINE - 2)) | 0);
+    var ly = 1 + ((Math.random() * (FINE - 2)) | 0);
+    if ((lx % 2) !== (ly % 2)) isOpen[lx][ly] = true;
+  }
+
+  var entranceRow = 1, exitRow = ROOMS - 2;
+  isOpen[0][entranceRow * 2 + 1] = true;
+  isOpen[FINE - 1][exitRow * 2 + 1] = true;
+
+  function toWorld(fx, fy) {
+    return { x: (fx - (FINE - 1) / 2) * CELL, z: (fy - (FINE - 1) / 2) * CELL };
+  }
+
+  var startPos = toWorld(1, entranceRow * 2 + 1);
+  var exitPos  = toWorld(FINE - 2, exitRow * 2 + 1);
+  var FIELD    = FINE * CELL;
+
+  // =============================================================
+  // GROUND — the maze corridors are baked into the texture
+  // =============================================================
+  var PX = 34;
+  (function ground() {
+    var c = document.createElement('canvas');
+    c.width = c.height = FINE * PX;
+    var g = c.getContext('2d');
+
+    g.fillStyle = '#7a5c2c';
+    g.fillRect(0, 0, c.width, c.height);
+
+    // trodden, lighter earth wherever the maze is walkable
+    for (var fx = 0; fx < FINE; fx++) {
+      for (var fy = 0; fy < FINE; fy++) {
+        if (!isOpen[fx][fy]) continue;
+        var px = fx * PX, py = fy * PX;
+        var rg = g.createRadialGradient(px + PX/2, py + PX/2, 2, px + PX/2, py + PX/2, PX * 0.85);
+        rg.addColorStop(0, 'rgba(176,143,86,0.95)');
+        rg.addColorStop(1, 'rgba(176,143,86,0)');
+        g.fillStyle = rg;
+        g.fillRect(px - PX * 0.4, py - PX * 0.4, PX * 1.8, PX * 1.8);
+      }
+    }
+
+    // grain + scattered dry leaf litter
+    for (var n = 0; n < 26000; n++) {
+      var x = Math.random() * c.width, y = Math.random() * c.height;
+      g.fillStyle = 'rgba(' + (95 + Math.random() * 75 | 0) + ',' +
+                              (70 + Math.random() * 60 | 0) + ',' +
+                              (26 + Math.random() * 34 | 0) + ',' +
+                              (0.10 + Math.random() * 0.22).toFixed(2) + ')';
+      g.fillRect(x, y, 1 + Math.random() * 3, 1 + Math.random() * 3);
+    }
+    for (var l = 0; l < 700; l++) {
+      g.save();
+      g.translate(Math.random() * c.width, Math.random() * c.height);
+      g.rotate(Math.random() * Math.PI);
+      g.fillStyle = 'rgba(150,124,58,0.35)';
+      g.fillRect(-4, -1, 8, 2);
+      g.restore();
+    }
+
+    var tex = new THREE.CanvasTexture(c);
+    tex.anisotropy = maxAniso;
+    var floor = new THREE.Mesh(
+      new THREE.PlaneGeometry(FIELD, FIELD),
+      new THREE.MeshStandardMaterial({ map: tex, roughness: 1, metalness: 0 })
+    );
+    floor.rotation.x = -Math.PI / 2;
+    floor.position.y = 0.01;
+    scene.add(floor);
+
+    // plain earth continuing past the field edge
+    var outerTex = tex.clone();
+    outerTex.needsUpdate = true;
+    outerTex.wrapS = outerTex.wrapT = THREE.RepeatWrapping;
+    outerTex.repeat.set(8, 8);
+    var outer = new THREE.Mesh(
+      new THREE.PlaneGeometry(FIELD + 160, FIELD + 160),
+      new THREE.MeshStandardMaterial({ map: outerTex, roughness: 1 })
+    );
+    outer.rotation.x = -Math.PI / 2;
+    scene.add(outer);
+  })();
+
+  // =============================================================
+  // CORN PLANT TEXTURE (drawn to canvas, alpha-tested)
+  // =============================================================
+  function makeCornTexture() {
+    var W = 256, H = 512;
+    var c = document.createElement('canvas'); c.width = W; c.height = H;
+    var g = c.getContext('2d');
+    var cx = W / 2, baseY = H - 2, topY = H * 0.11;
+
+    // --- stalk
+    var sg = g.createLinearGradient(cx - 8, 0, cx + 8, 0);
+    sg.addColorStop(0.0, '#456a22');
+    sg.addColorStop(0.45, '#82ad42');
+    sg.addColorStop(1.0, '#3d5f1d');
+    g.fillStyle = sg;
+    g.beginPath();
+    g.moveTo(cx - 8, baseY);
+    g.lineTo(cx - 3.5, topY);
+    g.lineTo(cx + 3.5, topY);
+    g.lineTo(cx + 8, baseY);
+    g.closePath();
+    g.fill();
+
+    // --- leaves
+    function leaf(attachY, dir, len, rise, droop, c0, c1) {
+      var tipX = cx + dir * len;
+      var tipY = attachY - rise + droop;
+      var a1x = cx + dir * len * 0.30, a1y = attachY - rise * 0.85;
+      var a2x = cx + dir * len * 0.72, a2y = attachY - rise * 0.95;
+      var w = Math.max(8, len * 0.17);
+
+      g.beginPath();
+      g.moveTo(cx, attachY + w * 0.55);
+      g.bezierCurveTo(a1x, a1y + w, a2x, a2y + w * 0.75, tipX, tipY);
+      g.bezierCurveTo(a2x, a2y - w * 0.45, a1x, a1y - w * 0.65, cx, attachY - w * 0.85);
+      g.closePath();
+      var lg = g.createLinearGradient(cx, attachY, tipX, tipY);
+      lg.addColorStop(0, c0);
+      lg.addColorStop(1, c1);
+      g.fillStyle = lg;
+      g.fill();
+
+      g.strokeStyle = 'rgba(238,255,206,0.20)';
+      g.lineWidth = 1.4;
+      g.beginPath();
+      g.moveTo(cx, attachY);
+      g.bezierCurveTo(a1x, a1y + w * 0.2, a2x, a2y + w * 0.1, tipX, tipY);
+      g.stroke();
+    }
+
+    var pal = [['#3a651b','#7fb340'], ['#48782a','#93c04c'], ['#325718','#6ea033']];
+    var ROWS = 8;
+    for (var i = 0; i < ROWS; i++) {
+      var f = i / (ROWS - 1);
+      var attachY = baseY - (H * 0.74) * f - 22;
+      var dir = (i % 2 === 0) ? -1 : 1;
+      var len = Math.min(cx - 8, 112 * (1 - f * 0.42) * (0.85 + Math.random() * 0.3));
+      leaf(attachY, dir, len, 42 * (1 - f * 0.3), 58 * (1 - f * 0.4),
+           pal[i % 3][0], pal[i % 3][1]);
+    }
+
+    // --- ear of corn tucked against the stalk
+    g.save();
+    g.translate(cx + 9, baseY - H * 0.30);
+    g.rotate(0.22);
+    g.fillStyle = '#a8bf5c';
+    g.beginPath();
+    g.ellipse(0, 0, 11, 34, 0, 0, Math.PI * 2);
+    g.fill();
+    g.strokeStyle = 'rgba(70,100,30,0.5)';
+    g.lineWidth = 1;
+    for (var e = -2; e <= 2; e++) {
+      g.beginPath(); g.moveTo(e * 4, -32); g.lineTo(e * 4, 32); g.stroke();
+    }
+    g.strokeStyle = '#c9a05a'; g.lineWidth = 2;
+    for (var s = 0; s < 5; s++) {
+      g.beginPath();
+      g.moveTo(0, -32);
+      g.quadraticCurveTo(4 + s * 3, -46, 2 + s * 5, -58);
+      g.stroke();
+    }
+    g.restore();
+
+    // --- tassel
+    g.strokeStyle = '#cbab6d';
+    g.lineWidth = 2.2;
+    for (var t = 0; t < 9; t++) {
+      var ang = (t / 8 - 0.5) * 1.25;
+      g.beginPath();
+      g.moveTo(cx, topY + 30);
+      g.quadraticCurveTo(cx + Math.sin(ang) * 24, topY - 2,
+                         cx + Math.sin(ang) * 42, topY - 26);
+      g.stroke();
+    }
+
+    var tex = new THREE.CanvasTexture(c);
+    tex.anisotropy = maxAniso;
+    tex.minFilter = THREE.LinearMipmapLinearFilter;
+    return tex;
+  }
+
+  // =============================================================
+  // CORN — instanced crossed billboards, wind in the vertex shader
+  // =============================================================
+  var uTime = { value: 0 };
+
+  var cornMat = new THREE.MeshStandardMaterial({
+    map: makeCornTexture(),
+    side: THREE.DoubleSide,
+    alphaTest: 0.38,
+    roughness: 0.92,
+    metalness: 0.0
+  });
+
+  cornMat.onBeforeCompile = function (shader) {
+    shader.uniforms.uTime = uTime;
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', '#include <common>\nuniform float uTime;')
+      .replace('#include <begin_vertex>', [
+        '#include <begin_vertex>',
+        '#ifdef USE_INSTANCING',
+        '  vec3 iPos = instanceMatrix[3].xyz;',
+        '  float h = clamp(position.y, 0.0, 1.0);',
+        '  float bend = h * h;',
+        '  float phase = iPos.x * 0.55 + iPos.z * 0.42;',
+        '  float gust = 0.62 + 0.38 * sin(uTime * 0.13 + iPos.x * 0.035 + iPos.z * 0.021);',
+        '  float sway = sin(uTime * 1.05 + phase) * 0.20',
+        '             + sin(uTime * 2.60 + phase * 1.7) * 0.065',
+        '             + sin(uTime * 0.47 + phase * 0.5) * 0.10;',
+        '  transformed.x += sway * bend * gust;',
+        '  transformed.z += sway * 0.42 * bend * gust;',
+        '#endif'
+      ].join('\n'));
+  };
+
+  var plantGeo = new THREE.PlaneGeometry(1, 1, 1, 4);
+  plantGeo.translate(0, 0.5, 0);
+
+  // --- collect every plant position first
+  var plants = [];
+  var PER_CELL = 15;
+
+  for (var wx = 0; wx < FINE; wx++) {
+    for (var wy = 0; wy < FINE; wy++) {
+      if (isOpen[wx][wy]) continue;
+      var wc = toWorld(wx, wy);
+      for (var p = 0; p < PER_CELL; p++) {
+        plants.push({
+          x: wc.x + (Math.random() - 0.5) * CELL * 1.02,
+          z: wc.z + (Math.random() - 0.5) * CELL * 1.02,
+          h: 2.7 + Math.random() * 0.85,
+          w: 1.35 + Math.random() * 0.55,
+          r: Math.random() * Math.PI
+        });
+      }
+    }
+  }
+
+  // --- surrounding field so the world has no visible edge
+  var half = FIELD / 2;
+  for (var o = 0; o < 2600; o++) {
+    var ox, oz;
+    do {
+      ox = (Math.random() - 0.5) * (FIELD + 150);
+      oz = (Math.random() - 0.5) * (FIELD + 150);
+    } while (Math.abs(ox) < half + 1.5 && Math.abs(oz) < half + 1.5);
+    plants.push({
+      x: ox, z: oz,
+      h: 2.6 + Math.random() * 0.9,
+      w: 1.35 + Math.random() * 0.55,
+      r: Math.random() * Math.PI
+    });
+  }
+
+  var QUADS = 2; // crossed pair per plant
+  var cornMesh = new THREE.InstancedMesh(plantGeo, cornMat, plants.length * QUADS);
+  cornMesh.frustumCulled = false;
+
+  var dummy = new THREE.Object3D();
+  var tint = new THREE.Color();
+  var idx = 0;
+  for (var pi = 0; pi < plants.length; pi++) {
+    var pl = plants[pi];
+    tint.setHSL(0.23 + Math.random() * 0.06, 0.34 + Math.random() * 0.2, 0.62 + Math.random() * 0.22);
+    for (var q = 0; q < QUADS; q++) {
+      dummy.position.set(pl.x, 0, pl.z);
+      dummy.rotation.set(0, pl.r + q * (Math.PI / QUADS), 0);
+      dummy.scale.set(pl.w, pl.h, 1);
+      dummy.updateMatrix();
+      cornMesh.setMatrixAt(idx, dummy.matrix);
+      cornMesh.setColorAt(idx, tint);
+      idx++;
+    }
+  }
+  cornMesh.instanceMatrix.needsUpdate = true;
+  if (cornMesh.instanceColor) cornMesh.instanceColor.needsUpdate = true;
+  scene.add(cornMesh);
+
+  // =============================================================
+  // KERNELS
+  // =============================================================
+  var rooms = [];
+  for (var kx = 0; kx < FINE; kx++) {
+    for (var ky = 0; ky < FINE; ky++) {
+      if (isOpen[kx][ky] && kx % 2 === 1 && ky % 2 === 1) rooms.push([kx, ky]);
+    }
+  }
+  rooms.sort(function () { return Math.random() - 0.5; });
+
+  var kernelGeo = new THREE.SphereGeometry(0.13, 10, 8);
+  var kernelMat = new THREE.MeshStandardMaterial({
+    color: 0xffd863, emissive: 0xd39c1c, emissiveIntensity: 0.85, roughness: 0.35
+  });
+  var kernels = [];
+  var WANT = Math.min(34, rooms.length);
+  for (var ki = 0; ki < WANT; ki++) {
+    var rc = rooms[ki];
+    if (rc[0] === 1 && rc[1] === entranceRow * 2 + 1) continue;
+    var wpos = toWorld(rc[0], rc[1]);
+    var m = new THREE.Mesh(kernelGeo, kernelMat);
+    m.position.set(wpos.x + (Math.random() - 0.5) * 1.3, 0.34, wpos.z + (Math.random() - 0.5) * 1.3);
+    scene.add(m);
+    kernels.push({ mesh: m, phase: Math.random() * 6.28, done: false });
+  }
+  var found = 0;
+
+  // =============================================================
+  // THE WAY OUT
+  // =============================================================
+  var exitLight = new THREE.PointLight(0xffe9ab, 1.8, 16, 2);
+  exitLight.position.set(exitPos.x, 1.5, exitPos.z);
+  scene.add(exitLight);
+
+  var exitPillar = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.10, 0.10, 3.4, 8),
+    new THREE.MeshBasicMaterial({
+      color: 0xfff3cc, transparent: true, opacity: 0.42,
+      blending: THREE.AdditiveBlending, depthWrite: false, fog: false
+    })
+  );
+  exitPillar.position.set(exitPos.x, 1.7, exitPos.z);
+  scene.add(exitPillar);
+  var exitSeen = false;
+
+  // =============================================================
+  // FIREFLIES
+  // =============================================================
+  var fireflies = [];
+  var ffGeo = new THREE.SphereGeometry(0.05, 6, 6);
+  for (var fi = 0; fi < 20; fi++) {
+    var fr = rooms[(Math.random() * rooms.length) | 0];
+    var fw = toWorld(fr[0], fr[1]);
+    var fm = new THREE.Mesh(ffGeo, new THREE.MeshBasicMaterial({ color: 0xfff3b8, fog: false }));
+    fm.position.set(fw.x, 1.0, fw.z);
+    scene.add(fm);
+    fireflies.push({
+      mesh: fm, cx: fw.x, cz: fw.z, cy: 0.85 + Math.random() * 0.7,
+      r1: 0.7 + Math.random() * 1.0, r2: 0.6 + Math.random() * 0.9,
+      speed: 0.22 + Math.random() * 0.26, phase: Math.random() * 6.28,
+      bob: 0.28 + Math.random() * 0.3
+    });
+  }
+
+  // =============================================================
+  // POLLEN
+  // =============================================================
+  var DUST = 550;
+  var dustGeo = new THREE.BufferGeometry();
+  var dPos = new Float32Array(DUST * 3);
+  var dRise = new Float32Array(DUST);
+  for (var di = 0; di < DUST; di++) {
+    dPos[di * 3]     = (Math.random() - 0.5) * FIELD;
+    dPos[di * 3 + 1] = Math.random() * 4.2;
+    dPos[di * 3 + 2] = (Math.random() - 0.5) * FIELD;
+    dRise[di] = 0.04 + Math.random() * 0.10;
+  }
+  dustGeo.setAttribute('position', new THREE.BufferAttribute(dPos, 3));
+
+  var dustTex = (function () {
+    var c = document.createElement('canvas'); c.width = c.height = 32;
+    var g = c.getContext('2d');
+    var rg = g.createRadialGradient(16, 16, 0, 16, 16, 16);
+    rg.addColorStop(0, 'rgba(255,244,206,0.95)');
+    rg.addColorStop(1, 'rgba(255,244,206,0)');
+    g.fillStyle = rg; g.fillRect(0, 0, 32, 32);
+    return new THREE.CanvasTexture(c);
+  })();
+
+  var dust = new THREE.Points(dustGeo, new THREE.PointsMaterial({
+    size: 0.085, map: dustTex, transparent: true, depthWrite: false,
+    blending: THREE.AdditiveBlending, opacity: 0.6
+  }));
+  scene.add(dust);
+
+  // =============================================================
+  // AUDIO — all synthesised, no files
+  // =============================================================
+  var actx = null, soundOn = true, master = null;
+
+  function initAudio() {
+    if (actx) return;
+    var AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) { soundOn = false; return; }
+    actx = new AC();
+
+    master = actx.createGain();
+    master.gain.value = 0.5;
+    master.connect(actx.destination);
+
+    // wind bed: brown-ish noise through a drifting lowpass
+    var len = actx.sampleRate * 4;
+    var buf = actx.createBuffer(1, len, actx.sampleRate);
+    var d = buf.getChannelData(0);
+    var last = 0;
+    for (var n = 0; n < len; n++) {
+      var w = Math.random() * 2 - 1;
+      last = (last + 0.02 * w) / 1.02;
+      d[n] = last * 4;
+    }
+    var noise = actx.createBufferSource();
+    noise.buffer = buf; noise.loop = true;
+
+    var lp = actx.createBiquadFilter();
+    lp.type = 'lowpass'; lp.frequency.value = 460;
+
+    var wg = actx.createGain(); wg.gain.value = 0.34;
+    noise.connect(lp); lp.connect(wg); wg.connect(master);
+    noise.start();
+
+    var lfo = actx.createOscillator(); lfo.frequency.value = 0.055;
+    var lfoAmt = actx.createGain(); lfoAmt.gain.value = 240;
+    lfo.connect(lfoAmt); lfoAmt.connect(lp.frequency);
+    lfo.start();
+
+    bird(); insect();
+  }
+
+  function tone(freq, dur, type, vol, pan) {
+    if (!actx || !soundOn) return;
+    var osc = actx.createOscillator();
+    osc.type = type || 'sine';
+    osc.frequency.value = freq;
+    var g = actx.createGain();
+    g.gain.setValueAtTime(0.0001, actx.currentTime);
+    g.gain.linearRampToValueAtTime(vol, actx.currentTime + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001, actx.currentTime + dur);
+    osc.connect(g);
+    if (actx.createStereoPanner) {
+      var sp = actx.createStereoPanner();
+      sp.pan.value = pan || 0;
+      g.connect(sp); sp.connect(master);
+    } else {
+      g.connect(master);
+    }
+    osc.start();
+    osc.stop(actx.currentTime + dur + 0.05);
+  }
+
+  function bird() {
+    if (soundOn) {
+      var notes = 2 + ((Math.random() * 3) | 0);
+      var base = 1750 + Math.random() * 1300;
+      var pan = Math.random() * 2 - 1;
+      for (var b = 0; b < notes; b++) {
+        (function (k) {
+          setTimeout(function () {
+            tone(base + Math.random() * 340 - 120, 0.13, 'sine', 0.05, pan);
+          }, k * 135);
+        })(b);
+      }
+    }
+    setTimeout(bird, 2400 + Math.random() * 5200);
+  }
+
+  function insect() {
+    if (soundOn) tone(4100 + Math.random() * 900, 0.055, 'triangle', 0.016, Math.random() * 2 - 1);
+    setTimeout(insect, 110 + Math.random() * 300);
+  }
+
+  function chime() { tone(1350 + Math.random() * 520, 0.65, 'sine', 0.085, 0); }
+
+  function rustle() {
+    if (!actx || !soundOn) return;
+    var dur = 0.2;
+    var b = actx.createBuffer(1, (actx.sampleRate * dur) | 0, actx.sampleRate);
+    var d = b.getChannelData(0);
+    for (var i2 = 0; i2 < d.length; i2++) {
+      var env = 1 - i2 / d.length;
+      d[i2] = (Math.random() * 2 - 1) * env * env;
+    }
+    var src = actx.createBufferSource(); src.buffer = b;
+    var bp = actx.createBiquadFilter();
+    bp.type = 'bandpass';
+    bp.frequency.value = 2000 + Math.random() * 1700;
+    bp.Q.value = 0.7;
+    var g = actx.createGain(); g.gain.value = 0.055;
+    src.connect(bp); bp.connect(g); g.connect(master);
+    src.start();
+  }
+
+  document.getElementById('soundToggle').addEventListener('click', function () {
+    soundOn = !soundOn;
+    if (master) master.gain.value = soundOn ? 0.5 : 0;
+    this.innerHTML = soundOn ? '&#128266; sound on' : '&#128264; sound off';
+  });
+
+  // =============================================================
+  // CONTROLS
+  // =============================================================
+  var keys = {};
+  window.addEventListener('keydown', function (e) {
+    keys[e.key.toLowerCase()] = true;
+    if (['arrowup','arrowdown','arrowleft','arrowright',' '].indexOf(e.key.toLowerCase()) > -1) e.preventDefault();
+  });
+  window.addEventListener('keyup', function (e) { keys[e.key.toLowerCase()] = false; });
+
+  var yaw = Math.atan2(exitPos.x - startPos.x, exitPos.z - startPos.z);
+  var pitch = 0;
+  var dragging = false, lastX = 0, lastY = 0;
+
+  renderer.domElement.addEventListener('pointerdown', function (e) {
+    dragging = true; lastX = e.clientX; lastY = e.clientY;
+  });
+  window.addEventListener('pointerup', function () { dragging = false; });
+  window.addEventListener('pointermove', function (e) {
+    if (!dragging) return;
+    yaw   -= (e.clientX - lastX) * 0.0035;
+    pitch  = Math.max(-0.55, Math.min(0.55, pitch - (e.clientY - lastY) * 0.0035));
+    lastX = e.clientX; lastY = e.clientY;
+  });
+
+  camera.position.set(startPos.x, 1.62, startPos.z);
+  camera.rotation.order = 'YXZ';
+
+  function blocked(x, z) {
+    var fx = Math.round(x / CELL + (FINE - 1) / 2);
+    var fy = Math.round(z / CELL + (FINE - 1) / 2);
+    for (var ax = -1; ax <= 1; ax++) {
+      for (var ay = -1; ay <= 1; ay++) {
+        var cx2 = fx + ax, cy2 = fy + ay;
+        if (cx2 < 0 || cy2 < 0 || cx2 >= FINE || cy2 >= FINE) continue;
+        if (isOpen[cx2][cy2]) continue;
+        var w = toWorld(cx2, cy2);
+        if (Math.abs(x - w.x) < CELL * 0.5 + 0.24 && Math.abs(z - w.z) < CELL * 0.5 + 0.24) return true;
+      }
+    }
+    return false;
+  }
+
+  // =============================================================
+  // UI
+  // =============================================================
+  function toast(msg, ms) {
+    var t = document.getElementById('toast');
+    t.textContent = msg;
+    t.style.opacity = '1';
+    clearTimeout(toast._h);
+    toast._h = setTimeout(function () { t.style.opacity = '0'; }, ms || 2800);
+  }
+
+  var started = false;
+  document.getElementById('enterBtn').addEventListener('click', function () {
+    initAudio();
+    if (actx && actx.state === 'suspended') actx.resume();
+    var ov = document.getElementById('overlay');
+    ov.classList.add('fadeOut');
+    setTimeout(function () { ov.style.display = 'none'; }, 1700);
+    document.getElementById('hud').style.display = 'flex';
+    document.getElementById('soundToggle').style.display = 'block';
+    started = true;
+    toast('the corn closes in behind you\u2026', 3600);
+  });
+
+  // =============================================================
+  // LOOP
+  // =============================================================
+  var clock = new THREE.Clock();
+  var walkT = 0, stepMark = 0;
+
+  function animate() {
+    requestAnimationFrame(animate);
+    var dt = Math.min(clock.getDelta(), 0.05);
+    var t = clock.elapsedTime;
+
+    uTime.value = reduceMotion ? 0 : t;
+
+    // fireflies
+    for (var f = 0; f < fireflies.length; f++) {
+      var ff = fireflies[f];
+      var a = t * ff.speed + ff.phase;
+      ff.mesh.position.set(
+        ff.cx + Math.sin(a) * ff.r1,
+        ff.cy + Math.sin(a * 1.7) * ff.bob,
+        ff.cz + Math.cos(a * 0.83) * ff.r2
+      );
+      var flick = 0.5 + 0.5 * Math.sin(t * 2.6 + ff.phase * 5);
+      ff.mesh.material.color.setRGB(1, 0.93, 0.55 + flick * 0.25);
+      ff.mesh.scale.setScalar(0.6 + flick * 0.7);
+    }
+
+    // pollen
+    var dp = dust.geometry.attributes.position.array;
+    for (var u = 0; u < DUST; u++) {
+      dp[u * 3 + 1] += dRise[u] * dt;
+      dp[u * 3]     += Math.sin(t * 0.28 + u) * 0.0035;
+      if (dp[u * 3 + 1] > 4.4) dp[u * 3 + 1] = 0;
+    }
+    dust.geometry.attributes.position.needsUpdate = true;
+
+    // kernels
+    for (var k = 0; k < kernels.length; k++) {
+      var kn = kernels[k];
+      if (kn.done) continue;
+      kn.mesh.position.y = 0.30 + Math.sin(t * 1.4 + kn.phase) * 0.055;
+      kn.mesh.rotation.y = t * 0.7;
+      var ddx = camera.position.x - kn.mesh.position.x;
+      var ddz = camera.position.z - kn.mesh.position.z;
+      if (started && ddx * ddx + ddz * ddz < 0.28) {
+        kn.done = true;
+        scene.remove(kn.mesh);
+        found++;
+        document.getElementById('kernelCount').textContent = 'kernels found: ' + found;
+        chime();
+      }
+    }
+
+    // exit
+    exitPillar.material.opacity = 0.30 + Math.sin(t * 1.8) * 0.14;
+    exitLight.intensity = 1.55 + Math.sin(t * 1.8) * 0.35;
+    if (started && !exitSeen) {
+      var ex = camera.position.x - exitPos.x, ez = camera.position.z - exitPos.z;
+      if (ex * ex + ez * ez < 5.5) {
+        exitSeen = true;
+        toast('you found the edge of the field \u2014 stay a while, or wander back in', 6000);
+      }
+    }
+
+    // movement
+    if (started) {
+      if (keys['arrowleft'])  yaw += 1.5 * dt;
+      if (keys['arrowright']) yaw -= 1.5 * dt;
+
+      var mx = 0, mz = 0;
+      if (keys['w'] || keys['arrowup'])   { mx += Math.sin(yaw); mz += Math.cos(yaw); }
+      if (keys['s'] || keys['arrowdown']) { mx -= Math.sin(yaw); mz -= Math.cos(yaw); }
+      if (keys['a']) { mx -= Math.cos(yaw); mz += Math.sin(yaw); }
+      if (keys['d']) { mx += Math.cos(yaw); mz -= Math.sin(yaw); }
+
+      var mag = Math.sqrt(mx * mx + mz * mz);
+      if (mag > 0.001) {
+        mx /= mag; mz /= mag;
+        var speed = 2.05;
+        walkT += dt * 6.4;
+        var nx = camera.position.x + mx * speed * dt;
+        var nz = camera.position.z + mz * speed * dt;
+        if (!blocked(nx, camera.position.z)) camera.position.x = nx;
+        if (!blocked(camera.position.x, nz)) camera.position.z = nz;
+
+        if (walkT - stepMark > Math.PI) { stepMark = walkT; rustle(); }
+      }
+
+      camera.position.y = 1.62 + (mag > 0.001 && !reduceMotion ? Math.sin(walkT) * 0.042 : 0);
+      camera.rotation.set(pitch, yaw, 0);
+    }
+
+    sky.position.copy(camera.position);
+    renderer.render(scene, camera);
+  }
+
+  animate();
+})();
+</script>
+</body>
+</html>
