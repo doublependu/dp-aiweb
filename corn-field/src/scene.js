@@ -13,6 +13,34 @@ const HAZE = 0xE9CB8A;
 // intensities from the original source have to carry the factor themselves.
 export const LEGACY_LIGHT_SCALE = Math.PI;
 
+// How long the afternoon takes to become dusk, in seconds. Tune freely.
+export const DAY_LENGTH = 360;
+
+// The two ends of the cycle. Everything in between is interpolated, so a new
+// time of day means editing one column, not hunting for scattered constants.
+const DAY = {
+  sunPos: new THREE.Vector3(-60, 26, 34),
+  sunColor: 0xffd79a, sunIntensity: 1.25,
+  glowTint: 0xffffff,
+  skyTop: 0x7ea9d6, skyMid: 0xf2cb8b, skyBottom: 0xf7e4b6,
+  hemiSky: 0xb8d2ef, hemiGround: 0x6d5327, hemiIntensity: 0.62,
+  ambColor: 0xffeac4, ambIntensity: 0.30,
+  fogColor: HAZE, fogDensity: 0.020
+};
+
+const DUSK = {
+  // Same bearing, dropped to about four degrees above the horizon.
+  sunPos: new THREE.Vector3(-60, 4.5, 34),
+  sunColor: 0xff8c3c, sunIntensity: 0.45,
+  glowTint: 0xff9a52,
+  skyTop: 0x2f3c66, skyMid: 0xdd8446, skyBottom: 0x8f5a38,
+  hemiSky: 0x54658f, hemiGround: 0x33260f, hemiIntensity: 0.28,
+  ambColor: 0xbf9a80, ambIntensity: 0.14,
+  // Held darker than skyMid so the far corn reads as a silhouette against a
+  // still-glowing sky. At midday the two match and the field just dissolves.
+  fogColor: 0xB9743C, fogDensity: 0.026
+};
+
 export function createScene(isOpen) {
   const scene = new THREE.Scene();
   scene.fog = new THREE.FogExp2(HAZE, 0.020);
@@ -29,11 +57,71 @@ export function createScene(isOpen) {
 
   const maxAniso = renderer.capabilities.getMaxAnisotropy();
   const sky = addSky(scene);
-  addLights(scene);
+  const lights = addLights(scene);
   addGround(scene, isOpen, maxAniso);
 
-  return { scene, camera, renderer, sky, maxAniso };
+  const daylight = createDaylight(renderer, scene, sky, lights);
+
+  return { scene, camera, renderer, sky, maxAniso, daylight };
 }
+
+// The light cycle runs once and settles at dusk. It does not loop back to
+// afternoon and it never reaches night — a wander with no fail state should
+// not end with the player unable to see the corridor they are standing in.
+function createDaylight(renderer, scene, sky, lights) {
+  const _a = new THREE.Color();
+  const _b = new THREE.Color();
+  function mix(target, hexA, hexB, t) {
+    _a.setHex(hexA); _b.setHex(hexB);
+    target.copy(_a).lerp(_b, t);
+  }
+
+  let elapsed = 0;
+  let darkness = 0;
+
+  function apply(e) {
+    lights.sun.position.lerpVectors(DAY.sunPos, DUSK.sunPos, e);
+    lights.glow.position.copy(lights.sun.position).multiplyScalar(3.2);
+    mix(lights.sun.color, DAY.sunColor, DUSK.sunColor, e);
+    mix(lights.glow.material.color, DAY.glowTint, DUSK.glowTint, e);
+    lights.sun.intensity = lerp(DAY.sunIntensity, DUSK.sunIntensity, e) * LEGACY_LIGHT_SCALE;
+
+    mix(lights.hemi.color, DAY.hemiSky, DUSK.hemiSky, e);
+    mix(lights.hemi.groundColor, DAY.hemiGround, DUSK.hemiGround, e);
+    lights.hemi.intensity = lerp(DAY.hemiIntensity, DUSK.hemiIntensity, e) * LEGACY_LIGHT_SCALE;
+
+    mix(lights.ambient.color, DAY.ambColor, DUSK.ambColor, e);
+    lights.ambient.intensity = lerp(DAY.ambIntensity, DUSK.ambIntensity, e) * LEGACY_LIGHT_SCALE;
+
+    mix(sky.material.uniforms.cTop.value, DAY.skyTop, DUSK.skyTop, e);
+    mix(sky.material.uniforms.cMid.value, DAY.skyMid, DUSK.skyMid, e);
+    mix(sky.material.uniforms.cBottom.value, DAY.skyBottom, DUSK.skyBottom, e);
+
+    mix(scene.fog.color, DAY.fogColor, DUSK.fogColor, e);
+    scene.fog.density = lerp(DAY.fogDensity, DUSK.fogDensity, e);
+    renderer.setClearColor(scene.fog.color);
+
+    darkness = e;
+  }
+
+  apply(0);
+
+  return {
+    // 0 at full afternoon, 1 at dusk. Eased, so it is also the right curve to
+    // hang other dusk-driven things off.
+    get darkness() { return darkness; },
+    update: function (dt) {
+      if (elapsed >= DAY_LENGTH) return;
+      elapsed = Math.min(elapsed + dt, DAY_LENGTH);
+      const p = elapsed / DAY_LENGTH;
+      // Smoothstep: the afternoon lingers, dusk arrives and then settles,
+      // instead of the light sliding at a constant mechanical rate.
+      apply(p * p * (3 - 2 * p));
+    }
+  };
+}
+
+function lerp(a, b, t) { return a + (b - a) * t; }
 
 function createRenderer() {
   // r128 had no colour management and wrote linear values straight to the
@@ -86,15 +174,21 @@ function addSky(scene) {
   return sky;
 }
 
-// Low, warm, late afternoon.
+// Low and warm to begin with; createDaylight drives these from here on.
 function addLights(scene) {
-  const sun = new THREE.DirectionalLight(0xffd79a, 1.25 * LEGACY_LIGHT_SCALE);
-  sun.position.set(-60, 26, 34);
+  const sun = new THREE.DirectionalLight(DAY.sunColor, DAY.sunIntensity * LEGACY_LIGHT_SCALE);
+  sun.position.copy(DAY.sunPos);
   scene.add(sun);
-  scene.add(new THREE.HemisphereLight(0xb8d2ef, 0x6d5327, 0.62 * LEGACY_LIGHT_SCALE));
-  scene.add(new THREE.AmbientLight(0xffeac4, 0.30 * LEGACY_LIGHT_SCALE));
 
-  addSunGlow(scene, sun.position);
+  const hemi = new THREE.HemisphereLight(DAY.hemiSky, DAY.hemiGround, DAY.hemiIntensity * LEGACY_LIGHT_SCALE);
+  scene.add(hemi);
+
+  const ambient = new THREE.AmbientLight(DAY.ambColor, DAY.ambIntensity * LEGACY_LIGHT_SCALE);
+  scene.add(ambient);
+
+  const glow = addSunGlow(scene, sun.position);
+
+  return { sun, hemi, ambient, glow };
 }
 
 function addSunGlow(scene, sunPosition) {
@@ -113,6 +207,7 @@ function addSunGlow(scene, sunPosition) {
   spr.scale.set(90, 90, 1);
   spr.position.copy(sunPosition).multiplyScalar(3.2);
   scene.add(spr);
+  return spr;
 }
 
 // The maze corridors are baked into the ground texture, so the trodden earth
