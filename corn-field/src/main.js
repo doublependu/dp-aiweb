@@ -19,7 +19,7 @@ const maze = createMaze();
 const isOpen = maze.isOpen;
 const exitPos = maze.exitPos;
 
-const { scene, camera, renderer, sky, maxAniso } = createScene(isOpen);
+const { scene, camera, renderer, sky, maxAniso, daylight } = createScene(isOpen);
 
 const corn = createCorn(isOpen, maxAniso);
 scene.add(corn.mesh);
@@ -86,12 +86,16 @@ let exitSeen = false;
 // =============================================================
 // FIREFLIES
 // =============================================================
+// They are out there all along, but only start showing once the light drops
+// — invisible through the afternoon, fully lit by dusk.
 const fireflies = [];
 const ffGeo = new THREE.SphereGeometry(0.05, 6, 6);
 for (let fi = 0; fi < 20; fi++) {
   const fr = rooms[(Math.random() * rooms.length) | 0];
   const fw = toWorld(fr[0], fr[1]);
-  const fm = new THREE.Mesh(ffGeo, new THREE.MeshBasicMaterial({ color: 0xfff3b8, fog: false }));
+  const fm = new THREE.Mesh(ffGeo, new THREE.MeshBasicMaterial({
+    color: 0xfff3b8, fog: false, transparent: true, opacity: 0
+  }));
   fm.position.set(fw.x, 1.0, fw.z);
   scene.add(fm);
   fireflies.push({
@@ -168,12 +172,24 @@ document.getElementById('enterBtn').addEventListener('click', function () {
 // =============================================================
 const clock = new THREE.Clock();
 
+function smoothstep(edge0, edge1, x) {
+  const t = Math.max(0, Math.min(1, (x - edge0) / (edge1 - edge0)));
+  return t * t * (3 - 2 * t);
+}
+
 function animate() {
   requestAnimationFrame(animate);
   const dt = Math.min(clock.getDelta(), 0.05);
   const t = clock.elapsedTime;
 
   corn.uTime.value = reduceMotion ? 0 : t;
+
+  // The afternoon only starts running down once you are actually in the corn.
+  if (started) daylight.update(dt);
+
+  // Held back to the second half of the cycle so the fireflies arrive with the
+  // dark rather than alongside it.
+  const ffGlow = smoothstep(0.45, 1.0, daylight.darkness);
 
   for (let f = 0; f < fireflies.length; f++) {
     const ff = fireflies[f];
@@ -186,6 +202,8 @@ function animate() {
     const flick = 0.5 + 0.5 * Math.sin(t * 2.6 + ff.phase * 5);
     ff.mesh.material.color.setRGB(1, 0.93, 0.55 + flick * 0.25);
     ff.mesh.scale.setScalar(0.6 + flick * 0.7);
+    ff.mesh.material.opacity = ffGlow;
+    ff.mesh.visible = ffGlow > 0.01;
   }
 
   const dp = dust.geometry.attributes.position.array;
