@@ -53,6 +53,15 @@ enclosing the player and the whole feeling collapses.
 **The world has no visible edge.** Corn continues past the maze bounds
 in every direction. Keep it that way.
 
+**The colour and light setup deliberately opts out of modern three.**
+The scene was authored against r128. `scene.js` sets
+`ColorManagement.enabled = false` and a linear output colour space, and
+every light intensity carries `LEGACY_LIGHT_SCALE` (`Math.PI`) because
+r155 deleted the non-physical lighting path that used to apply it.
+These are not leftovers — removing any of them shifts the whole
+afternoon paler and flatter. If you ever do want modern colour, it is a
+deliberate re-grade of every hue in the file, not a one-line switch.
+
 ## Style
 
 - Vanilla JS, no TypeScript, no framework.
