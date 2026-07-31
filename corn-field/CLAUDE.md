@@ -1,7 +1,9 @@
 # A Field of Corn
 
-A first-person three.js scene: wandering a corn maze on a late summer
-afternoon. Browser-based, Vite + vanilla JS (no framework).
+A first-person three.js scene: wandering a corn maze on a working farm.
+It opens on a late summer afternoon and turns through dusk, night, dawn
+and day on a twenty-minute loop (`CYCLE_LENGTH` in `scene.js`).
+Browser-based, Vite + vanilla JS (no framework).
 
 ## The point of this project
 
@@ -27,10 +29,22 @@ things to notice, places to rest, texture and detail.
   passages. A few extra openings are punched in afterwards to create
   loops, because dead ends feel stressful.
 - `src/corn.js` — the corn. One `InstancedMesh`, ~11k instances, single
-  draw call.
+  draw call. Stops at the field boundary; outside is `farm.js`.
 - `src/audio.js` — all sound is synthesised via Web Audio. No audio files.
-- `src/player.js` — movement, collision, camera.
-- `src/scene.js` — renderer, lights, sky, fog, ground.
+  Birds, crickets and an owl are cross-faded by `setNight()`.
+- `src/player.js` — movement, collision, camera. Collision is the maze
+  grid plus a list of `obstacles` (circles, or oriented boxes) supplied
+  by `farm.js` and `lanterns.js`.
+- `src/scene.js` — renderer, lights, fog, ground, and the day/night
+  cycle. Palettes are sampled by the sun's **elevation**, not by the
+  clock, so dusk and dawn come out of the same table and colour can
+  never drift out of step with where the sun is.
+- `src/sky.js` — dome, stars, sun glow, and the moon (phase drawn in the
+  fragment shader). All of it rides in one group parked on the camera.
+- `src/farm.js` — the world outside the maze: stubble, dirt track, barn,
+  tractor, bales, fence, scarecrow, treeline, and a bench to sit on.
+- `src/lanterns.js` — lanterns on stakes along the corridors, so the
+  night is walkable.
 
 ## Technical constraints — please respect these
 
@@ -50,8 +64,26 @@ per-frame CPU matrix updates — that was the original bottleneck.
 plants are 2.6–3.5m. If plants get shorter than ~2.2m the maze stops
 enclosing the player and the whole feeling collapses.
 
-**The world has no visible edge.** Corn continues past the maze bounds
-in every direction. Keep it that way.
+**The world has no visible edge.** It used to have none because the corn
+ran on forever; now the corn stops at the field boundary and the land
+outside carries the job instead — stubble, then a treeline at ~96m that
+the haze has mostly eaten. Keep the *property*: the world must always
+dissolve into distance, never end at a line. If you move the treeline
+in, or thin the fog, you get a visible rim and the field stops feeling
+like it is somewhere.
+
+**Night must stay walkable.** The cycle now runs all the way round to
+dark. There is no fail state here, so the player must never be unable
+to see the corridor they are standing in. Three things guarantee that
+together — the `NIGHT` palette's `hemiI`/`ambI` floor, moonlight, and
+the lanterns. Do not lower any of them for realism without checking the
+other two still carry it.
+
+**Only three point lights ever burn at once.** The corn is one
+instanced mesh of ~11k quads, so every light in the scene is paid for by
+all of them. `lanterns.js` gives every lantern a free glow sprite and
+hands real `PointLight`s to the nearest three only. Adding a light per
+lantern will look identical and cost a great deal.
 
 **The colour and light setup deliberately opts out of modern three.**
 The scene was authored against r128. `scene.js` sets

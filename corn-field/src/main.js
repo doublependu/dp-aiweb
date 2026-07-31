@@ -1,16 +1,19 @@
 // A Field of Corn — a wander.
 //
-// Wiring only: the scene, the maze, the corn, the player and the sound each
-// live in their own module. What is left here is the small ambient stuff
-// (kernels, fireflies, pollen, the way out), the overlay/HUD, and the loop.
+// Wiring only: the scene, the maze, the corn, the farm outside it, the
+// lanterns, the player and the sound each live in their own module. What is
+// left here is the small ambient stuff (kernels, fireflies, pollen, the way
+// out), the overlay/HUD, and the loop.
 
 import './style.css';
 import * as THREE from 'three';
 import { FIELD, toWorld, createMaze, openRooms } from './maze.js';
 import { createScene, LEGACY_LIGHT_SCALE } from './scene.js';
 import { createCorn } from './corn.js';
+import { createFarm } from './farm.js';
+import { createLanterns } from './lanterns.js';
 import { createPlayer } from './player.js';
-import { initAudio, resumeAudio, toggleSound, chime, rustle } from './audio.js';
+import { initAudio, resumeAudio, toggleSound, setNight, chime, rustle } from './audio.js';
 
 const reduceMotion = window.matchMedia &&
                      window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -19,10 +22,21 @@ const maze = createMaze();
 const isOpen = maze.isOpen;
 const exitPos = maze.exitPos;
 
-const { scene, camera, renderer, sky, maxAniso, daylight } = createScene(isOpen);
+const { scene, camera, renderer, maxAniso, daylight } = createScene(isOpen);
 
 const corn = createCorn(isOpen, maxAniso);
 scene.add(corn.mesh);
+
+// Shuffled once and shared: kernels take the front of the list, lanterns walk
+// it looking for spots far enough apart, fireflies sample it at random.
+const rooms = openRooms(isOpen);
+rooms.sort(function () { return Math.random() - 0.5; });
+
+const farm = createFarm(maze.startPos, exitPos, maxAniso);
+scene.add(farm.group);
+
+const lanterns = createLanterns(isOpen, rooms, maze.startPos, exitPos);
+scene.add(lanterns.group);
 
 const player = createPlayer({
   camera: camera,
@@ -31,13 +45,9 @@ const player = createPlayer({
   startPos: maze.startPos,
   exitPos: exitPos,
   reduceMotion: reduceMotion,
+  obstacles: farm.obstacles.concat(lanterns.obstacles),
   onStep: rustle
 });
-
-// Shuffled once and shared: kernels take the front of the list, fireflies
-// sample it at random.
-const rooms = openRooms(isOpen);
-rooms.sort(function () { return Math.random() - 0.5; });
 
 // =============================================================
 // KERNELS
@@ -87,7 +97,7 @@ let exitSeen = false;
 // FIREFLIES
 // =============================================================
 // They are out there all along, but only start showing once the light drops
-// — invisible through the afternoon, fully lit by dusk.
+// — invisible through the afternoon, fully lit by dark.
 const fireflies = [];
 const ffGeo = new THREE.SphereGeometry(0.05, 6, 6);
 for (let fi = 0; fi < 20; fi++) {
@@ -172,10 +182,9 @@ document.getElementById('enterBtn').addEventListener('click', function () {
 // =============================================================
 const clock = new THREE.Clock();
 
-function smoothstep(edge0, edge1, x) {
-  const t = Math.max(0, Math.min(1, (x - edge0) / (edge1 - edge0)));
-  return t * t * (3 - 2 * t);
-}
+// Said once each, the first time it happens. Observations, not instructions —
+// nothing here asks you to do anything about it.
+let saidDark = false, saidDawn = false;
 
 function animate() {
   requestAnimationFrame(animate);
@@ -183,13 +192,26 @@ function animate() {
   const t = clock.elapsedTime;
 
   corn.uTime.value = reduceMotion ? 0 : t;
+  farm.uTime.value = reduceMotion ? 0 : t;
 
-  // The afternoon only starts running down once you are actually in the corn.
-  if (started) daylight.update(dt);
+  // The day only starts turning once you are actually in the corn, but the
+  // sky still has to be re-parked on the camera every frame, so this is a
+  // zero-length step rather than a skipped one.
+  daylight.update(started ? dt : 0, t);
 
-  // Held back to the second half of the cycle so the fireflies arrive with the
-  // dark rather than alongside it.
-  const ffGlow = smoothstep(0.45, 1.0, daylight.darkness);
+  const night = daylight.night;
+  setNight(night);
+  farm.update(night);
+  lanterns.update(t, night, camera.position);
+
+  if (started && !saidDark && night > 0.97) {
+    saidDark = true;
+    toast('the field has gone blue. the lanterns are lit', 5200);
+  }
+  if (started && saidDark && !saidDawn && night < 0.03 && daylight.elevation > 0) {
+    saidDawn = true;
+    toast('morning, and the mist is still in the rows', 5200);
+  }
 
   for (let f = 0; f < fireflies.length; f++) {
     const ff = fireflies[f];
@@ -202,9 +224,13 @@ function animate() {
     const flick = 0.5 + 0.5 * Math.sin(t * 2.6 + ff.phase * 5);
     ff.mesh.material.color.setRGB(1, 0.93, 0.55 + flick * 0.25);
     ff.mesh.scale.setScalar(0.6 + flick * 0.7);
-    ff.mesh.material.opacity = ffGlow;
-    ff.mesh.visible = ffGlow > 0.01;
+    ff.mesh.material.opacity = night;
+    ff.mesh.visible = night > 0.01;
   }
+
+  // Pollen belongs to the warm part of the day; after dark what is left is
+  // only what catches the moon.
+  dust.material.opacity = 0.6 - 0.42 * night;
 
   const dp = dust.geometry.attributes.position.array;
   for (let u = 0; u < DUST; u++) {
@@ -236,13 +262,12 @@ function animate() {
     const ex = camera.position.x - exitPos.x, ez = camera.position.z - exitPos.z;
     if (ex * ex + ez * ez < 5.5) {
       exitSeen = true;
-      toast('you found the edge of the field — stay a while, or wander back in', 6000);
+      toast('you found the edge of the field — there is a bench out there, if you want it', 6000);
     }
   }
 
   if (started) player.update(dt);
 
-  sky.position.copy(camera.position);
   renderer.render(scene, camera);
 }
 

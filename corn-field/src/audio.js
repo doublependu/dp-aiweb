@@ -5,6 +5,20 @@ let actx = null;
 let master = null;
 let soundOn = true;
 
+// 0 in daylight, 1 after dark. The field does not sound the same at night, and
+// getting that wrong is more noticeable than getting the light wrong.
+let night = 0;
+let windGain = null;
+
+export function setNight(n) {
+  night = n;
+  if (windGain && actx) {
+    // The air goes still after sunset. Ramped rather than set, or the change
+    // lands as an audible step every frame.
+    windGain.gain.setTargetAtTime(0.34 - 0.12 * night, actx.currentTime, 1.5);
+  }
+}
+
 // Must be called from a user gesture; browsers will not start a context otherwise.
 export function initAudio() {
   if (actx) return;
@@ -32,8 +46,8 @@ export function initAudio() {
   const lp = actx.createBiquadFilter();
   lp.type = 'lowpass'; lp.frequency.value = 460;
 
-  const wg = actx.createGain(); wg.gain.value = 0.34;
-  noise.connect(lp); lp.connect(wg); wg.connect(master);
+  windGain = actx.createGain(); windGain.gain.value = 0.34;
+  noise.connect(lp); lp.connect(windGain); windGain.connect(master);
   noise.start();
 
   const lfo = actx.createOscillator(); lfo.frequency.value = 0.055;
@@ -41,7 +55,7 @@ export function initAudio() {
   lfo.connect(lfoAmt); lfoAmt.connect(lp.frequency);
   lfo.start();
 
-  bird(); insect();
+  bird(); insect(); cricket(); owl();
 }
 
 export function resumeAudio() {
@@ -75,16 +89,19 @@ function tone(freq, dur, type, vol, pan) {
   osc.stop(actx.currentTime + dur + 0.05);
 }
 
-// Bird and insect reschedule themselves for as long as the page lives; the
-// irregular gaps are what stop the field sounding like a loop.
+// These four reschedule themselves for as long as the page lives; the
+// irregular gaps are what stop the field sounding like a loop. Each is gated
+// on the time of day rather than switched, so dusk is a handover and not a
+// cut: the last birds are still going while the first crickets start.
 function bird() {
-  if (soundOn) {
+  const vol = 0.05 * (1 - night);
+  if (soundOn && vol > 0.004) {
     const notes = 2 + ((Math.random() * 3) | 0);
     const base = 1750 + Math.random() * 1300;
     const pan = Math.random() * 2 - 1;
     for (let b = 0; b < notes; b++) {
       setTimeout(function () {
-        tone(base + Math.random() * 340 - 120, 0.13, 'sine', 0.05, pan);
+        tone(base + Math.random() * 340 - 120, 0.13, 'sine', vol, pan);
       }, b * 135);
     }
   }
@@ -92,8 +109,40 @@ function bird() {
 }
 
 function insect() {
-  if (soundOn) tone(4100 + Math.random() * 900, 0.055, 'triangle', 0.016, Math.random() * 2 - 1);
+  const vol = 0.016 * (1 - night * 0.85);
+  if (soundOn && vol > 0.002) {
+    tone(4100 + Math.random() * 900, 0.055, 'triangle', vol, Math.random() * 2 - 1);
+  }
   setTimeout(insect, 110 + Math.random() * 300);
+}
+
+// A cricket is a short run of pulses, not one tone. Three or four of them,
+// close together, is the difference between a cricket and a beep.
+function cricket() {
+  const vol = 0.019 * night;
+  if (soundOn && vol > 0.002) {
+    const pulses = 3 + ((Math.random() * 2) | 0);
+    const base = 2350 + Math.random() * 700;
+    const pan = Math.random() * 2 - 1;
+    for (let p = 0; p < pulses; p++) {
+      setTimeout(function () {
+        tone(base, 0.028, 'triangle', vol, pan);
+      }, p * 42);
+    }
+  }
+  setTimeout(cricket, 260 + Math.random() * 700);
+}
+
+// Twice, low, a long way off, and rarely.
+function owl() {
+  const vol = 0.035 * night;
+  if (soundOn && vol > 0.004) {
+    const base = 360 + Math.random() * 60;
+    const pan = Math.random() * 1.4 - 0.7;
+    tone(base, 0.42, 'sine', vol, pan);
+    setTimeout(function () { tone(base * 0.92, 0.55, 'sine', vol * 0.85, pan); }, 620);
+  }
+  setTimeout(owl, 17000 + Math.random() * 34000);
 }
 
 export function chime() {

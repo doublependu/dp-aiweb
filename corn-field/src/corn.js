@@ -9,11 +9,14 @@
 //     updates was the original bottleneck.
 
 import * as THREE from 'three';
-import { FINE, CELL, FIELD, toWorld } from './maze.js';
+import { FINE, CELL, toWorld } from './maze.js';
 
-const PER_CELL = 15;
+// Doubled from the original 15. At 15 you could see the next corridor over
+// through the gaps between stalks, which made the maze feel like a suggestion
+// rather than a wall. The budget for it comes from the corn that used to
+// carry on past the field boundary — that is farm.js's job now.
+const PER_CELL = 30;
 const QUADS = 2;      // crossed pair per plant
-const SURROUND = 2600; // plants beyond the maze, so the world has no visible edge
 
 export function createCorn(isOpen, maxAniso) {
   const uTime = { value: 0 };
@@ -21,7 +24,10 @@ export function createCorn(isOpen, maxAniso) {
   const cornMat = new THREE.MeshStandardMaterial({
     map: makeCornTexture(maxAniso),
     side: THREE.DoubleSide,
-    alphaTest: 0.38,
+    // Lowered from 0.38: it keeps the soft outer edge of every leaf instead
+    // of cutting it away, which is a surprising amount of the opacity of a
+    // wall of corn.
+    alphaTest: 0.28,
     roughness: 0.92,
     metalness: 0.0
   });
@@ -65,7 +71,9 @@ export function createCorn(isOpen, maxAniso) {
     tint.setHSL(0.23 + Math.random() * 0.06, 0.34 + Math.random() * 0.2, 0.62 + Math.random() * 0.22);
     for (let q = 0; q < QUADS; q++) {
       dummy.position.set(pl.x, 0, pl.z);
-      dummy.rotation.set(0, pl.r + q * (Math.PI / QUADS), 0);
+      // A little lean. Plants that all stand dead upright line their gaps up
+      // with each other; leaning them breaks the sightlines through the wall.
+      dummy.rotation.set(pl.tx, pl.r + q * (Math.PI / QUADS), pl.tz);
       dummy.scale.set(pl.w, pl.h, 1);
       dummy.updateMatrix();
       mesh.setMatrixAt(idx, dummy.matrix);
@@ -81,6 +89,12 @@ export function createCorn(isOpen, maxAniso) {
 
 // Heights stay above the 1.62m eye line — shorter than ~2.2m and the maze
 // stops enclosing the player.
+//
+// The corn stops at the field boundary now. It used to carry on into the
+// distance so the world had no visible edge; the world still has no visible
+// edge, but what is out there is farmland (see farm.js) rather than more of
+// the same, so that the maze is a thing you can see the shape of from
+// outside it.
 function placePlants(isOpen) {
   const plants = [];
 
@@ -93,26 +107,13 @@ function placePlants(isOpen) {
           x: wc.x + (Math.random() - 0.5) * CELL * 1.02,
           z: wc.z + (Math.random() - 0.5) * CELL * 1.02,
           h: 2.7 + Math.random() * 0.85,
-          w: 1.35 + Math.random() * 0.55,
-          r: Math.random() * Math.PI
+          w: 1.5 + Math.random() * 0.62,
+          r: Math.random() * Math.PI,
+          tx: (Math.random() - 0.5) * 0.16,
+          tz: (Math.random() - 0.5) * 0.16
         });
       }
     }
-  }
-
-  const half = FIELD / 2;
-  for (let o = 0; o < SURROUND; o++) {
-    let ox, oz;
-    do {
-      ox = (Math.random() - 0.5) * (FIELD + 150);
-      oz = (Math.random() - 0.5) * (FIELD + 150);
-    } while (Math.abs(ox) < half + 1.5 && Math.abs(oz) < half + 1.5);
-    plants.push({
-      x: ox, z: oz,
-      h: 2.6 + Math.random() * 0.9,
-      w: 1.35 + Math.random() * 0.55,
-      r: Math.random() * Math.PI
-    });
   }
 
   return plants;

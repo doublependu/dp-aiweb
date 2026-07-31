@@ -5,6 +5,7 @@ import { FINE, CELL, toWorld } from './maze.js';
 const EYE = 1.62;
 const SPEED = 2.05;
 const TURN = 1.5;
+const BODY = 0.26;   // how much room the player takes up
 
 export function createPlayer(options) {
   const camera = options.camera;
@@ -12,6 +13,9 @@ export function createPlayer(options) {
   const isOpen = options.isOpen;
   const reduceMotion = options.reduceMotion;
   const onStep = options.onStep;
+  // Solid things that are not corn: lantern posts, hay bales, the barn. A
+  // circle if it has `r`, an oriented box if it has `hw`/`hd`.
+  const obstacles = options.obstacles || [];
 
   const keys = {};
   window.addEventListener('keydown', function (e) {
@@ -33,7 +37,11 @@ export function createPlayer(options) {
   window.addEventListener('pointermove', function (e) {
     if (!dragging) return;
     yaw -= (e.clientX - lastX) * 0.0035;
-    pitch = Math.max(-0.55, Math.min(0.55, pitch - (e.clientY - lastY) * 0.0035));
+    // Asymmetric on purpose. There is nothing under your feet but a path, and
+    // there is now a moon and a sky full of stars overhead — at the old limit
+    // of 0.55 up, a full moon at midnight sits above the top of the screen
+    // and you can never quite look at it.
+    pitch = Math.max(-0.55, Math.min(0.98, pitch - (e.clientY - lastY) * 0.0035));
     lastX = e.clientX; lastY = e.clientY;
   });
 
@@ -52,6 +60,23 @@ export function createPlayer(options) {
         if (isOpen[cx2][cy2]) continue;
         const w = toWorld(cx2, cy2);
         if (Math.abs(x - w.x) < CELL * 0.5 + 0.24 && Math.abs(z - w.z) < CELL * 0.5 + 0.24) return true;
+      }
+    }
+
+    for (let i = 0; i < obstacles.length; i++) {
+      const o = obstacles[i];
+      const dx = x - o.x, dz = z - o.z;
+      if (o.r !== undefined) {
+        const rr = o.r + BODY;
+        if (dx * dx + dz * dz < rr * rr) return true;
+      } else {
+        // Rotate into the box's own frame rather than growing an
+        // axis-aligned bound around it, which for the barn would put an
+        // invisible wall several metres out from the real one.
+        const turn = o.turn || 0;
+        const c = Math.cos(-turn), s = Math.sin(-turn);
+        const lx = dx * c - dz * s, lz = dx * s + dz * c;
+        if (Math.abs(lx) < o.hw + BODY && Math.abs(lz) < o.hd + BODY) return true;
       }
     }
     return false;
