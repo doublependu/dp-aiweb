@@ -4,10 +4,25 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>corn-field</title>
+    <title>A Field of Corn — a wander</title>
   </head>
   <body>
-    <div id="app"></div>
+    <div id="overlay">
+      <h1>A Field of Corn</h1>
+      <p>No score, no clock, no wrong way to go.<br />Walk. Listen. Follow a firefly if one drifts past.</p>
+      <button id="enterBtn">Step into the corn</button>
+    </div>
+
+    <div id="vignette"></div>
+
+    <div id="hud" style="display: none">
+      <div class="kernels" id="kernelCount">kernels found: 0</div>
+      <div class="hint">W/S walk &middot; A/D step sideways<br />&larr; &rarr; turn &middot; or drag to look</div>
+    </div>
+
+    <div id="toast"></div>
+    <button id="soundToggle" style="display: none">&#128266; sound on</button>
+
     <script type="module" src="/src/main.js"></script>
   </body>
 </html>
