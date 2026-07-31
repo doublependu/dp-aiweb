@@ -76,3 +76,11 @@ Run `npm run dev` and look at it. This project's correctness is visual
 and felt — a change can be bug-free and still wrong. When you finish a
 visual change, say what you expect it to look like so I can check
 whether that matches what I see.
+
+
+## Git and Workflow Constraints
+- Never create a git commit, push to remote, create branches, or open pull requests.
+- Do not auto-commit or auto-push after implementing changes or fixing bugs.
+- Always apply edits directly to the local files and leave the working directory unstaged for user review.
+
+

@@ -62,8 +62,8 @@ export function createPlayer(options) {
     if (keys['arrowright']) yaw -= TURN * dt;
 
     let mx = 0, mz = 0;
-    if (keys['w'] || keys['arrowup']) { mx += Math.sin(yaw); mz += Math.cos(yaw); }
-    if (keys['s'] || keys['arrowdown']) { mx -= Math.sin(yaw); mz -= Math.cos(yaw); }
+    if (keys['s'] || keys['arrowup']) { mx += Math.sin(yaw); mz += Math.cos(yaw); }
+    if (keys['w'] || keys['arrowdown']) { mx -= Math.sin(yaw); mz -= Math.cos(yaw); }
     if (keys['a']) { mx -= Math.cos(yaw); mz += Math.sin(yaw); }
     if (keys['d']) { mx += Math.cos(yaw); mz -= Math.sin(yaw); }
 
