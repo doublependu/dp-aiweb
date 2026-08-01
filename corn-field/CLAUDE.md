@@ -1,6 +1,6 @@
 # A Field of Corn
 
-A first-person three.js scene: wandering a corn maze on a working farm.
+A third-person three.js scene: wandering a corn maze on a working farm.
 It opens on a late summer afternoon and turns through dusk, night, dawn
 and day on a twenty-minute loop (`CYCLE_LENGTH` in `scene.js`).
 Browser-based, Vite + vanilla JS (no framework).
@@ -32,9 +32,15 @@ things to notice, places to rest, texture and detail.
   draw call. Stops at the field boundary; outside is `farm.js`.
 - `src/audio.js` — all sound is synthesised via Web Audio. No audio files.
   Birds, crickets and an owl are cross-faded by `setNight()`.
-- `src/player.js` — movement, collision, camera. Collision is the maze
-  grid plus a list of `obstacles` (circles, or oriented boxes) supplied
-  by `farm.js` and `lanterns.js`.
+- `src/player.js` — movement, collision, and the camera boom that
+  follows the body. Collision is the maze grid plus a list of
+  `obstacles` (circles, or oriented boxes) supplied by `farm.js` and
+  `lanterns.js`; the same test, with a little more room, is what stops
+  the camera reversing into the corn.
+- `src/hero.js` — the body itself: `public/hero_male.glb`, the one
+  binary asset in the project, and a weight-mixed state machine over its
+  clips. It is told where to stand and how fast it is going; it never
+  decides anything.
 - `src/scene.js` — renderer, lights, fog, ground, and the day/night
   cycle. Palettes are sampled by the sun's **elevation**, not by the
   clock, so dusk and dawn come out of the same table and colour can
@@ -75,6 +81,28 @@ per-frame CPU matrix updates — that was the original bottleneck.
 **Corn must stay taller than eye height.** Camera eye is at 1.62m;
 plants are 2.6–3.5m. If plants get shorter than ~2.2m the maze stops
 enclosing the player and the whole feeling collapses.
+
+**The camera is on a boom in a 3.2m corridor, which is the tightest
+constraint in the file.** It cannot simply hang three metres behind you:
+that point is inside the corn for most of the maze. Three things keep it
+honest and all three are load-bearing. It walks the collision grid out
+from the body and stops short of the corn, snapping in and easing back
+out — the other way round and every corner is spent looking at the black
+side of a wall. Its downward pitch is capped, because the boom rises as
+you look down and at much past 2.3m it clears the shortest corn and you
+can see over the maze, which throws away the whole point of being in
+one. And looking up shortens the boom instead of pushing it through the
+floor, so the top of the pitch range ends at the back of your own head
+with the body faded out — that is what keeps the moon reachable, and the
+moon was the reason the pitch limit was raised in the first place.
+
+**The body is what the field reads, not the camera.** `player.position`
+is the feet. Portals, animals, lanterns, the gravel in the garden and
+the kernels all take that, and getting it wrong is not cosmetic — a door
+that charges because the camera drifted through it takes the page away
+from somebody who never walked anywhere. The camera position is for two
+things only: what the sky and the rain are parked on, and which way a
+billboard turns.
 
 **The world has no visible edge.** It used to have none because the corn
 ran on forever; now the corn stops at the field boundary and the land
@@ -131,7 +159,9 @@ deliberate re-grade of every hue in the file, not a one-line switch.
 - Vanilla JS, no TypeScript, no framework.
 - Prefer procedural/canvas-generated assets over binary files where the
   quality cost is acceptable — it keeps the project a single clone away
-  from running.
+  from running. `public/hero_male.glb` is the one exception and should
+  stay the only one: a rigged body and a walk cycle are not things you
+  draw into a 2D context at load time.
 - Comments explain *why*, not *what*.
 
 ## Verifying changes

@@ -71,30 +71,31 @@ export function createCritters(isOpen, maxAniso) {
     // rather than an event that happens.
     buzz: 0,
 
-    update: function (dt, t, cameraPosition, night, voice) {
-      if (!primed) { prev.copy(cameraPosition); primed = true; }
-      vel.subVectors(cameraPosition, prev).divideScalar(Math.max(dt, 1e-4));
-      prev.copy(cameraPosition);
+    update: function (dt, t, playerPos, viewPos, night, voice) {
+      VIEW.copy(viewPos || playerPos);
+      if (!primed) { prev.copy(playerPos); primed = true; }
+      vel.subVectors(playerPos, prev).divideScalar(Math.max(dt, 1e-4));
+      prev.copy(playerPos);
       const speed = vel.length();
 
       for (let i = 0; i < animals.length; i++) {
-        animals[i].update(dt, t, cameraPosition, night, voice);
+        animals[i].update(dt, t, playerPos, night, voice);
       }
 
       let danger = 0, buzz = 0;
       for (let i = 0; i < snakes.length; i++) {
-        danger = Math.max(danger, snakes[i].update(dt, t, cameraPosition, vel, speed, voice));
+        danger = Math.max(danger, snakes[i].update(dt, t, playerPos, vel, speed, voice));
       }
       for (let i = 0; i < swarms.length; i++) {
-        danger = Math.max(danger, swarms[i].update(dt, t, cameraPosition, vel, speed, voice));
+        danger = Math.max(danger, swarms[i].update(dt, t, playerPos, vel, speed, voice));
         buzz = Math.max(buzz, swarms[i].buzz);
       }
-      danger = Math.max(danger, spider.update(dt, t, cameraPosition));
+      danger = Math.max(danger, spider.update(dt, t, playerPos));
       this.danger = danger;
       this.buzz = buzz;
 
       for (let i = 0; i < crows.length; i++) {
-        crows[i].update(dt, t, cameraPosition, night, voice);
+        crows[i].update(dt, t, playerPos, night, voice);
       }
     }
   };
@@ -230,8 +231,14 @@ function billboard(texture, w, h) {
   return mesh;
 }
 
-function faceCamera(mesh, cameraPosition) {
-  mesh.rotation.y = Math.atan2(cameraPosition.x - mesh.position.x, cameraPosition.z - mesh.position.z);
+// Where the camera is this frame, which since the piece went third-person is
+// not where the player is. A billboard has to turn to the eye or it reads as
+// the flat card it is; everything else in here cares about the body instead,
+// so the eye is kept here rather than threaded through every animal.
+const VIEW = new THREE.Vector3();
+
+function faceCamera(mesh) {
+  mesh.rotation.y = Math.atan2(VIEW.x - mesh.position.x, VIEW.z - mesh.position.z);
 }
 
 function pick(range) { return range[0] + Math.random() * (range[1] - range[0]); }
@@ -261,19 +268,19 @@ function makeFriendly(group, spec, texture, grid) {
     timer = pick(spec.rest);
   }
 
-  function appear(cameraPosition) {
+  function appear(playerPos) {
     if (spec.path) {
       // Big animals come round a corner, so they start on the path, out of
       // sight, and walk in.
-      const spot = grid.randomOpen(cameraPosition, 13, 21);
+      const spot = grid.randomOpen(playerPos, 13, 21);
       if (!spot) return false;
-      if (grid.sees(spot, cameraPosition)) return false;
+      if (grid.sees(spot, playerPos)) return false;
       pos.set(spot.x, spec.h / 2, spot.z);
       cell = [spot.fx, spot.fy];
-      target.copy(cameraPosition);
+      target.copy(playerPos);
     } else {
       // Small ones are already in the corn. They only have to step out of it.
-      const spot = grid.randomEdge(cameraPosition, 4.5, spec.notice * 0.8);
+      const spot = grid.randomEdge(playerPos, 4.5, spec.notice * 0.8);
       if (!spot) return false;
       pos.set(spot.x, spec.h / 2, spot.z);
       target.set(spot.tx, spec.h / 2, spot.tz);
@@ -298,8 +305,8 @@ function makeFriendly(group, spec, texture, grid) {
   }
 
   return {
-    update: function (dt, t, cameraPosition, night, voice) {
-      const dx = cameraPosition.x - pos.x, dz = cameraPosition.z - pos.z;
+    update: function (dt, t, playerPos, night, voice) {
+      const dx = playerPos.x - pos.x, dz = playerPos.z - pos.z;
       const dist = Math.hypot(dx, dz);
       timer -= dt;
 
@@ -309,7 +316,7 @@ function makeFriendly(group, spec, texture, grid) {
         const hour = spec.path ? (1 - 0.45 * night) : (0.55 + 0.45 * night);
         if (timer <= 0) {
           timer = 6;
-          if (Math.random() < hour) appear(cameraPosition);
+          if (Math.random() < hour) appear(playerPos);
         }
         return;
       }
@@ -319,7 +326,7 @@ function makeFriendly(group, spec, texture, grid) {
           repath -= dt;
           if (repath <= 0) {
             repath = 1.1;
-            const goal = grid.cellOf(cameraPosition.x, cameraPosition.z);
+            const goal = grid.cellOf(playerPos.x, playerPos.z);
             const next = grid.stepToward(cell, goal);
             if (next) {
               cell = next;
@@ -353,7 +360,7 @@ function makeFriendly(group, spec, texture, grid) {
       } else if (state === 'going') {
         if (spec.path) {
           if (Math.hypot(target.x - pos.x, target.z - pos.z) < 0.4 || repath <= 0) {
-            const next = grid.awayFrom(cell, cameraPosition);
+            const next = grid.awayFrom(cell, playerPos);
             if (next) {
               cell = next;
               const w = toWorld(next[0], next[1]);
@@ -368,7 +375,7 @@ function makeFriendly(group, spec, texture, grid) {
           const away = Math.atan2(-dx, -dz);
           stepTo(dt, pos.x + Math.sin(away) * 4, pos.z + Math.cos(away) * 4, spec.speed * 1.6);
         }
-        if (timer <= 0 || dist > GONE || (dist > 6 && !grid.sees(pos, cameraPosition))) goAway();
+        if (timer <= 0 || dist > GONE || (dist > 6 && !grid.sees(pos, playerPos))) goAway();
       }
 
       // A standing animal is never quite still: a slow shift of weight, and
@@ -377,7 +384,7 @@ function makeFriendly(group, spec, texture, grid) {
       const bob = moving ? Math.sin(walk * 4.5) * spec.h * 0.028
                          : Math.sin(t * 1.7) * spec.h * 0.012;
       mesh.position.set(pos.x, spec.h / 2 + bob, pos.z);
-      faceCamera(mesh, cameraPosition);
+      faceCamera(mesh);
     }
   };
 }
@@ -398,8 +405,8 @@ function makeSnake(group, tex, grid) {
   let timer = 0;
   let heading = Math.random() * 6.28;
 
-  function place(cameraPosition) {
-    const spot = grid.randomOpen(cameraPosition, 14, 30) || grid.randomOpen(cameraPosition, 0, 40);
+  function place(playerPos) {
+    const spot = grid.randomOpen(playerPos, 14, 30) || grid.randomOpen(playerPos, 0, 40);
     if (spot) pos.set(spot.x, 0.13, spot.z);
     state = 'lying';
     mesh.visible = true;
@@ -407,8 +414,8 @@ function makeSnake(group, tex, grid) {
   place(new THREE.Vector3(0, 0, 0));
 
   return {
-    update: function (dt, t, cameraPosition, vel, speed, voice) {
-      const dx = cameraPosition.x - pos.x, dz = cameraPosition.z - pos.z;
+    update: function (dt, t, playerPos, vel, speed, voice) {
+      const dx = playerPos.x - pos.x, dz = playerPos.z - pos.z;
       const dist = Math.hypot(dx, dz) || 1e-4;
       // How much of the player's movement is straight away from the snake.
       const receding = speed > 0.4 ? (vel.x * dx + vel.z * dz) / (speed * dist) : 0;
@@ -450,7 +457,7 @@ function makeSnake(group, tex, grid) {
         pos.x += Math.sin(heading) * 1.25 * dt;
         pos.z += Math.cos(heading) * 1.25 * dt;
         if (timer <= 0) {
-          if (dist > 12 || !grid.sees(pos, cameraPosition)) place(cameraPosition);
+          if (dist > 12 || !grid.sees(pos, playerPos)) place(playerPos);
           else { state = 'lying'; timer = 6; }
         }
       }
@@ -459,7 +466,7 @@ function makeSnake(group, tex, grid) {
       const up = state === 'roused' || state === 'chasing' ? 1 : 0;
       mesh.scale.set(1, 1 + up * 0.45, 1);
       mesh.position.set(pos.x, 0.13 + up * 0.10 + Math.sin(t * 3 + pos.x) * 0.01, pos.z);
-      faceCamera(mesh, cameraPosition);
+      faceCamera(mesh);
 
       if (state === 'lying') return 0;
       return Math.max(0, 1 - dist / 7) * (state === 'chasing' ? 1 : 0.7);
@@ -487,8 +494,8 @@ function makeSwarm(group, tex, grid) {
   let state = 'hovering';
   let timer = 0;
 
-  function place(cameraPosition) {
-    const spot = grid.randomOpen(cameraPosition, 12, 30) || grid.randomOpen(cameraPosition, 0, 40);
+  function place(playerPos) {
+    const spot = grid.randomOpen(playerPos, 12, 30) || grid.randomOpen(playerPos, 0, 40);
     if (spot) pos.set(spot.x, 1.15, spot.z);
     state = 'hovering';
   }
@@ -498,8 +505,8 @@ function makeSwarm(group, tex, grid) {
     // Held rather than triggered: the buzz is a level that follows how close
     // they are, and audio.js reads it every frame.
     buzz: 0,
-    update: function (dt, t, cameraPosition, vel, speed, voice) {
-      const dx = cameraPosition.x - pos.x, dz = cameraPosition.z - pos.z;
+    update: function (dt, t, playerPos, vel, speed, voice) {
+      const dx = playerPos.x - pos.x, dz = playerPos.z - pos.z;
       const dist = Math.hypot(dx, dz) || 1e-4;
       const receding = speed > 0.4 ? (vel.x * dx + vel.z * dz) / (speed * dist) : 0;
       timer -= dt;
@@ -526,7 +533,7 @@ function makeSwarm(group, tex, grid) {
         if (timer <= 0 || dist > 10 || receding > -0.15) { state = 'settling'; timer = 5; }
       } else if (state === 'settling') {
         if (timer <= 0) {
-          if (dist > 11 || !grid.sees(pos, cameraPosition)) place(cameraPosition);
+          if (dist > 11 || !grid.sees(pos, playerPos)) place(playerPos);
           else { state = 'hovering'; timer = 6; }
         }
       }
@@ -539,7 +546,7 @@ function makeSwarm(group, tex, grid) {
           pos.y + Math.sin(a * 2.3 + b.phase) * 0.14,
           pos.z + Math.cos(a * 1.3) * b.r
         );
-        faceCamera(b.mesh, cameraPosition);
+        faceCamera(b.mesh);
       }
 
       const close = Math.max(0, 1 - dist / 6);
@@ -572,19 +579,19 @@ function makeSpider(group, tex, grid) {
   let climb = 0;
 
   return {
-    update: function (dt, t, cameraPosition) {
-      const dist = Math.hypot(cameraPosition.x - base.x, cameraPosition.z - base.z);
+    update: function (dt, t, playerPos) {
+      const dist = Math.hypot(playerPos.x - base.x, playerPos.z - base.z);
       const want = dist < 3.0 ? 1 : 0;
       climb += (want - climb) * Math.min(1, dt * 2.2);
 
       web.position.y = base.y;
-      faceCamera(web, cameraPosition);
+      faceCamera(web);
       body.position.set(
         base.x,
         base.y + climb * 0.62 + Math.sin(t * 0.9) * 0.02 * (1 - climb),
         base.z
       );
-      faceCamera(body, cameraPosition);
+      faceCamera(body);
 
       return Math.max(0, 1 - dist / 5) * 0.55;
     }
@@ -610,27 +617,27 @@ function makeCrow(group, tex) {
   let trip = 0;
   let willPerch = false;
 
-  function launch(cameraPosition) {
+  function launch(playerPos) {
     const a = Math.random() * Math.PI * 2;
     const b = a + Math.PI * (0.55 + Math.random() * 0.9);
-    from.set(cameraPosition.x + Math.cos(a) * 70, 16 + Math.random() * 10, cameraPosition.z + Math.sin(a) * 70);
-    to.set(cameraPosition.x + Math.cos(b) * 70, 14 + Math.random() * 12, cameraPosition.z + Math.sin(b) * 70);
+    from.set(playerPos.x + Math.cos(a) * 70, 16 + Math.random() * 10, playerPos.z + Math.sin(a) * 70);
+    to.set(playerPos.x + Math.cos(b) * 70, 14 + Math.random() * 12, playerPos.z + Math.sin(b) * 70);
     willPerch = Math.random() < 0.45;
     const p = Math.random() * Math.PI * 2;
-    perch.set(cameraPosition.x + Math.cos(p) * 7, 3.15, cameraPosition.z + Math.sin(p) * 7);
+    perch.set(playerPos.x + Math.cos(p) * 7, 3.15, playerPos.z + Math.sin(p) * 7);
     state = 'crossing';
     trip = 0;
   }
 
   return {
-    update: function (dt, t, cameraPosition, night, voice) {
+    update: function (dt, t, playerPos, night, voice) {
       timer -= dt;
 
       if (state === 'gone') {
         // Crows keep daylight hours. After dark the field is the owl's.
         if (timer <= 0) {
           timer = 25 + Math.random() * 80;
-          if (night < 0.5) launch(cameraPosition);
+          if (night < 0.5) launch(playerPos);
         }
         return;
       }
@@ -667,7 +674,7 @@ function makeCrow(group, tex) {
         mesh.position.copy(perch);
         mesh.position.y = perch.y + Math.sin(t * 1.3) * 0.04;
         mesh.scale.set(1, 1, 1);
-        const near = Math.hypot(cameraPosition.x - perch.x, cameraPosition.z - perch.z);
+        const near = Math.hypot(playerPos.x - perch.x, playerPos.z - perch.z);
         if (timer <= 0 || near < 3.5) {
           state = 'leaving';
           trip = 0;
@@ -677,7 +684,7 @@ function makeCrow(group, tex) {
         }
       }
 
-      faceCamera(mesh, cameraPosition);
+      faceCamera(mesh);
     }
   };
 }

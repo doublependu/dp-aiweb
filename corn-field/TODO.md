@@ -1,11 +1,5 @@
 # TODO
 
-1. I've added hero_male.glb in the public folder, please make the game third person and camera follow this hero character
-  - hold "shift" to run
-  - "space" to jump
-  - animation should be mapped to the state of the character
-  
-
 # Done
 
 1. **Full day cycle.** `scene.js` runs afternoon → dusk → night → dawn →
@@ -111,6 +105,34 @@
     stepping back out cancels it. When it does commit the field fades
     to the door's own colour, the sound swells, and the page goes. Same
     tab: back is one key, and the field is regenerated when you return.
+
+14. **Third person.** `hero.js`, and `player.js` rewritten around it. The
+    camera has come off the eyes and onto a boom behind a body that walks
+    the field for you: `hero_male.glb` scaled to 1.78m and driven by six of
+    its seven clips — idle, walk, run, the push-off, the fall, the landing —
+    mixed by weight rather than sequenced, so a landing can happen over the
+    top of a run and nothing has to be timed. Shift runs, space is about
+    eighty centimetres of hop, the walk cycle plays at whatever rate keeps
+    the feet with the floor, and the body turns into the direction it is
+    going instead of snapping to it.
+
+    The boom is the whole of the design problem. A corridor is 3.2m wide and
+    the corn is 2.6m at its shortest, so a camera hung far enough back to
+    see somebody is a camera standing in the corn half the time. It samples
+    the same grid the player collides against and pulls in when the corn is
+    behind you, snapping in and easing out; it is capped on the way down so
+    it can never clear the top of the wall and let you look over the maze;
+    and craning up shortens it rather than driving it into the ground, so
+    the last of the pitch ends at the back of your own head with the body
+    faded out and the moon still where it was.
+
+    Everything in the field that used to read `camera.position` now reads
+    the body — the doors, the animals, the lanterns, the gravel, the
+    kernels — because the two are three metres apart and a portal you can
+    trigger by pointing the camera at it is not a door you walked through.
+    The animals are the one thing that needs both: they judge you by where
+    your feet are and turn to face the camera, since a billboard aimed at
+    the wrong point goes back to reading as a flat card.
 
 # Also changed along the way
 

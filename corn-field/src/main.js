@@ -16,6 +16,7 @@ import { createGarden } from './zen.js';
 import { createCritters } from './critters.js';
 import { createWeather } from './weather.js';
 import { createPortals } from './portals.js';
+import { createHero } from './hero.js';
 import { createPlayer } from './player.js';
 import {
   initAudio, resumeAudio, toggleSound, setNight, chime, rustle,
@@ -66,16 +67,30 @@ scene.traverse(function (o) {
   if (o.isMesh && o.material && o.material.isMeshStandardMaterial) weather.patch(o.material);
 });
 
+// The body the camera follows. It arrives a moment after the rest of the
+// field does — it is the one thing here that is loaded rather than built — so
+// it patches its own materials for cloud shadow when it turns up.
+const hero = createHero(function (materials) {
+  for (let i = 0; i < materials.length; i++) weather.patch(materials[i]);
+});
+scene.add(hero.group);
+
 const player = createPlayer({
   camera: camera,
   domElement: renderer.domElement,
   isOpen: isOpen,
   startPos: maze.startPos,
   exitPos: exitPos,
-  reduceMotion: reduceMotion,
+  avatar: hero,
   obstacles: farm.obstacles.concat(lanterns.obstacles, garden.obstacles, portals.obstacles),
   onStep: rustle
 });
+
+// Where the player is standing, as opposed to where the camera is watching
+// from. The two used to be the same point and most of the field was written
+// against it; the camera is three metres back now, and everything that means
+// "you" wants the body.
+const you = player.position;
 
 // =============================================================
 // KERNELS
@@ -275,23 +290,25 @@ function animate() {
   const night = daylight.night;
   setNight(night);
   farm.update(night);
-  lanterns.update(t, night, camera.position);
+  lanterns.update(t, night, you);
 
   // A frame behind the daylight it reads, which nothing can see.
   weather.update(started ? dt : 0, camera.position, daylight.elevation, night, scene.fog.color);
   setRain(weather.state.rain);
 
   if (started) {
-    critters.update(dt, t, camera.position, night, critterVoice);
+    // Two positions, and they are not the same argument twice: the animals
+    // judge you by where your feet are, and turn to face the camera.
+    critters.update(dt, t, you, camera.position, night, critterVoice);
     setDanger(critters.danger);
     setBuzz(critters.buzz);
-    garden.update(dt, t, camera.position, function (dist) { critterVoice('drip', dist); });
+    garden.update(dt, t, you, function (dist) { critterVoice('drip', dist); });
   }
 
   // The doors keep turning over before you have started and after you have
   // gone: they are the only thing in the field that has to look alive in the
   // frame the page is taken away in.
-  portals.update(dt, t, camera.position, night);
+  portals.update(dt, t, you, night);
   setPortal(portals.level);
 
   if (started && !saidDark && night > 0.97) {
@@ -306,7 +323,7 @@ function animate() {
     saidRain = true;
     toast('rain, a little of it, going through the corn', 5200);
   }
-  if (started && !saidGarden && garden.inside(camera.position)) {
+  if (started && !saidGarden && garden.inside(you)) {
     saidGarden = true;
     toast('somebody rakes this. the lines will close over your prints', 6000);
   }
@@ -349,8 +366,8 @@ function animate() {
     if (kn.done) continue;
     kn.mesh.position.y = 0.30 + Math.sin(t * 1.4 + kn.phase) * 0.055;
     kn.mesh.rotation.y = t * 0.7;
-    const ddx = camera.position.x - kn.mesh.position.x;
-    const ddz = camera.position.z - kn.mesh.position.z;
+    const ddx = you.x - kn.mesh.position.x;
+    const ddz = you.z - kn.mesh.position.z;
     if (started && ddx * ddx + ddz * ddz < 0.28) {
       kn.done = true;
       scene.remove(kn.mesh);
@@ -363,16 +380,18 @@ function animate() {
   exitPillar.material.opacity = 0.30 + Math.sin(t * 1.8) * 0.14;
   exitLight.intensity = (1.55 + Math.sin(t * 1.8) * 0.35) * LEGACY_LIGHT_SCALE * EXIT_FALLOFF_GAIN;
   if (started && !exitSeen) {
-    const ex = camera.position.x - exitPos.x, ez = camera.position.z - exitPos.z;
+    const ex = you.x - exitPos.x, ez = you.z - exitPos.z;
     if (ex * ex + ez * ez < 5.5) {
       exitSeen = true;
       toast('you found the edge of the field — there is a bench out there, if you want it', 6000);
     }
   }
 
-  // Once a door has you, you stop walking. The field keeps going without you,
-  // which is the point of it.
-  if (started && !leavingFor) player.update(dt);
+  // Once a door has you, you stop walking — but the camera keeps following
+  // the body, which goes back to standing there. The field keeps going
+  // without you, which is the point of it.
+  player.update(dt, started && !leavingFor);
+  hero.update(dt, player.motion);
 
   renderer.render(scene, camera);
 }
