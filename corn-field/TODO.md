@@ -1,6 +1,33 @@
 # TODO
 
-## Done
+1. Please put an interactive zen garden in the middle of the maize maze
+
+2. Add some friendly animals in the maze. They'd occasionally wonder out, look at you and hurry away
+   - racoon
+   - deer
+   - mouse
+   - wild turkey
+   - crows (fly in, fly out)
+   - and others you can think of
+   - small animals can go through and between corn stalks, while big animals, like deer, will need to follow the maze path like you. 
+
+3. Add some dangerous animals in the maze
+   - snake
+   - bee
+   - and others you can think of
+   - they should look a little bit threatening, the background sound should indicate danger
+   - they don't really attack: if you walk past them then they'll run away
+   - if you start to run away from them then they might chase you a little bit. 
+
+4. the corn stalk should cast shadows
+
+5. Add weather
+   - light rain sometimes
+   - cloud move in the sky and cast shadow on the ground and corn stalk
+
+
+
+# Done
 
 1. **Full day cycle.** `scene.js` runs afternoon → dusk → night → dawn →
    day → round again on a loop. `CYCLE_LENGTH` (1200s) is the only dial.
@@ -35,7 +62,7 @@
    block of corn in a worked field, so you can see where it starts and
    ends from outside it.
 
-## Also changed along the way
+# Also changed along the way
 
 - Stars, a milky way, and the occasional shooting star.
 - The night has its own sound: birds fade out, crickets come up, an owl
@@ -44,8 +71,7 @@
   above the old pitch limit.
 - A bench under a tree past the exit. Nothing happens there.
 
-## Ideas, unstarted
+# Ideas, unstarted
 
-- Weather. Cloud shadows crossing the field would suit the light cycle.
 - The kernels are unexplained. Perhaps they should stay that way.
 - Somewhere to sit *inside* the maze, not only outside it.
