@@ -1,6 +1,10 @@
 # TODO
 
-*(nothing outstanding)*
+1. I've added hero_male.glb in the public folder, please make the game third person and camera follow this hero character
+  - hold "shift" to run
+  - "space" to jump
+  - animation should be mapped to the state of the character
+  
 
 # Done
 
