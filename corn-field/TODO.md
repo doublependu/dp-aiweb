@@ -25,6 +25,8 @@
    - light rain sometimes
    - cloud move in the sky and cast shadow on the ground and corn stalk
 
+6. Use PointerLockControls for using mouse to look around
+
 
 
 # Done
