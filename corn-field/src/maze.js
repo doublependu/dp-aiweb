@@ -10,6 +10,15 @@ export const FINE = ROOMS * 2 + 1;
 export const CELL = 3.2;
 export const FIELD = FINE * CELL;
 
+// The clearing at the middle of the maze, where the garden is. A corridor is
+// too narrow to be anywhere, so the centre three-by-three block of fine cells
+// is opened out into one room — wide enough to stand back and look at, and
+// wide enough that four corridors run into it, which turns the centre from a
+// junction into a place you can arrive at from any direction.
+export const CLEARING_C = (FINE - 1) / 2;
+export const CLEARING_HALF = 1;                   // fine cells either side
+export const CLEARING_R = (CLEARING_HALF + 0.5) * CELL;   // world radius of the open floor
+
 export function toWorld(fx, fy) {
   return { x: (fx - (FINE - 1) / 2) * CELL, z: (fy - (FINE - 1) / 2) * CELL };
 }
@@ -24,6 +33,14 @@ export function createMaze() {
   }
 
   carve(isOpen);
+
+  // The clearing is opened after the carve, so the maze is a real maze first
+  // and the middle of it is knocked through afterwards.
+  for (let gx = CLEARING_C - CLEARING_HALF; gx <= CLEARING_C + CLEARING_HALF; gx++) {
+    for (let gy = CLEARING_C - CLEARING_HALF; gy <= CLEARING_C + CLEARING_HALF; gy++) {
+      isOpen[gx][gy] = true;
+    }
+  }
 
   // A few extra openings create loops — dead ends are stressful, loops are calming.
   for (let loop = 0; loop < 7; loop++) {

@@ -20,9 +20,10 @@ const QUADS = 2;      // crossed pair per plant
 
 export function createCorn(isOpen, maxAniso) {
   const uTime = { value: 0 };
+  const cornTex = makeCornTexture(maxAniso);
 
   const cornMat = new THREE.MeshStandardMaterial({
-    map: makeCornTexture(maxAniso),
+    map: cornTex,
     side: THREE.DoubleSide,
     // Lowered from 0.38: it keeps the soft outer edge of every leaf instead
     // of cutting it away, which is a surprising amount of the opacity of a
@@ -32,28 +33,44 @@ export function createCorn(isOpen, maxAniso) {
     metalness: 0.0
   });
 
-  cornMat.onBeforeCompile = function (shader) {
+  // Displacing by h*h makes the plant pivot from its base instead of sliding
+  // sideways as a whole.
+  const WIND = [
+    '#include <begin_vertex>',
+    '#ifdef USE_INSTANCING',
+    '  vec3 iPos = instanceMatrix[3].xyz;',
+    '  float h = clamp(position.y, 0.0, 1.0);',
+    '  float bend = h * h;',
+    '  float phase = iPos.x * 0.55 + iPos.z * 0.42;',
+    '  float gust = 0.62 + 0.38 * sin(uTime * 0.13 + iPos.x * 0.035 + iPos.z * 0.021);',
+    '  float sway = sin(uTime * 1.05 + phase) * 0.20',
+    '             + sin(uTime * 2.60 + phase * 1.7) * 0.065',
+    '             + sin(uTime * 0.47 + phase * 0.5) * 0.10;',
+    '  transformed.x += sway * bend * gust;',
+    '  transformed.z += sway * 0.42 * bend * gust;',
+    '#endif'
+  ].join('\n');
+
+  function bendInWind(shader) {
     shader.uniforms.uTime = uTime;
     shader.vertexShader = shader.vertexShader
       .replace('#include <common>', '#include <common>\nuniform float uTime;')
-      // Displacing by h*h makes the plant pivot from its base instead of
-      // sliding sideways as a whole.
-      .replace('#include <begin_vertex>', [
-        '#include <begin_vertex>',
-        '#ifdef USE_INSTANCING',
-        '  vec3 iPos = instanceMatrix[3].xyz;',
-        '  float h = clamp(position.y, 0.0, 1.0);',
-        '  float bend = h * h;',
-        '  float phase = iPos.x * 0.55 + iPos.z * 0.42;',
-        '  float gust = 0.62 + 0.38 * sin(uTime * 0.13 + iPos.x * 0.035 + iPos.z * 0.021);',
-        '  float sway = sin(uTime * 1.05 + phase) * 0.20',
-        '             + sin(uTime * 2.60 + phase * 1.7) * 0.065',
-        '             + sin(uTime * 0.47 + phase * 0.5) * 0.10;',
-        '  transformed.x += sway * bend * gust;',
-        '  transformed.z += sway * 0.42 * bend * gust;',
-        '#endif'
-      ].join('\n'));
-  };
+      .replace('#include <begin_vertex>', WIND);
+  }
+
+  cornMat.onBeforeCompile = bendInWind;
+
+  // The shadow pass runs its own material, which knows nothing about the
+  // wind. Left alone, eleven thousand plants would sway while their shadows
+  // stood still — which is far more noticeable than no shadow at all. So the
+  // depth material gets the identical displacement, and the alpha map too, or
+  // every plant would cast the shadow of a solid rectangle.
+  const depthMat = new THREE.MeshDepthMaterial({
+    depthPacking: THREE.RGBADepthPacking,
+    map: cornTex,
+    alphaTest: 0.28
+  });
+  depthMat.onBeforeCompile = bendInWind;
 
   const plantGeo = new THREE.PlaneGeometry(1, 1, 1, 4);
   plantGeo.translate(0, 0.5, 0);
@@ -62,6 +79,20 @@ export function createCorn(isOpen, maxAniso) {
 
   const mesh = new THREE.InstancedMesh(plantGeo, cornMat, plants.length * QUADS);
   mesh.frustumCulled = false;
+  mesh.castShadow = true;
+  // Casts but does not receive, which is a deliberate asymmetry.
+  //
+  // A billboard has no real normal — DoubleSide flips it to face the camera,
+  // which is the whole reason a wall of flat quads reads as a lit plant at
+  // all. Shadow receiving does not play along: it samples by world position,
+  // so the wall comes back mottled with the shadows of the leaves in front of
+  // it, and the field goes from summer green to a dark, blotchy olive. It is
+  // arguably more correct and it looks worse, and this scene's colour was
+  // hand-picked against corn lit the other way. The shadows that matter are
+  // the ones the corn throws across the corridor floor, and those are cast,
+  // not received.
+  mesh.receiveShadow = false;
+  mesh.customDepthMaterial = depthMat;
 
   const dummy = new THREE.Object3D();
   const tint = new THREE.Color();

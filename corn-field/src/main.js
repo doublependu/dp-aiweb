@@ -12,8 +12,14 @@ import { createScene, LEGACY_LIGHT_SCALE } from './scene.js';
 import { createCorn } from './corn.js';
 import { createFarm } from './farm.js';
 import { createLanterns } from './lanterns.js';
+import { createGarden } from './zen.js';
+import { createCritters } from './critters.js';
+import { createWeather } from './weather.js';
 import { createPlayer } from './player.js';
-import { initAudio, resumeAudio, toggleSound, setNight, chime, rustle } from './audio.js';
+import {
+  initAudio, resumeAudio, toggleSound, setNight, chime, rustle,
+  setRain, setDanger, setBuzz, critterVoice
+} from './audio.js';
 
 const reduceMotion = window.matchMedia &&
                      window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -35,8 +41,23 @@ rooms.sort(function () { return Math.random() - 0.5; });
 const farm = createFarm(maze.startPos, exitPos, maxAniso);
 scene.add(farm.group);
 
-const lanterns = createLanterns(isOpen, rooms, maze.startPos, exitPos);
+const garden = createGarden(maxAniso);
+scene.add(garden.group);
+
+const lanterns = createLanterns(isOpen, rooms, maze.startPos, exitPos, [garden.flame]);
 scene.add(lanterns.group);
+
+const critters = createCritters(isOpen, maxAniso);
+scene.add(critters.group);
+
+// Everything lit by the sun is also shaded by whatever gets in the sun's way,
+// so the cloud patch goes on after the world is built and before anything has
+// had a chance to compile. The sky's own group is skipped: it is not lit, and
+// a cloud cannot shadow the cloud layer it belongs to.
+const weather = createWeather(scene);
+scene.traverse(function (o) {
+  if (o.isMesh && o.material && o.material.isMeshStandardMaterial) weather.patch(o.material);
+});
 
 const player = createPlayer({
   camera: camera,
@@ -45,7 +66,7 @@ const player = createPlayer({
   startPos: maze.startPos,
   exitPos: exitPos,
   reduceMotion: reduceMotion,
-  obstacles: farm.obstacles.concat(lanterns.obstacles),
+  obstacles: farm.obstacles.concat(lanterns.obstacles, garden.obstacles),
   onStep: rustle
 });
 
@@ -164,10 +185,17 @@ document.getElementById('soundToggle').addEventListener('click', function () {
   this.innerHTML = on ? '&#128266; sound on' : '&#128264; sound off';
 });
 
+// The shower schedule is measured in minutes, which is right for wandering
+// and wrong for checking that the rain still looks like rain.
+window.addEventListener('keydown', function (e) {
+  if (e.key === 'r' || e.key === 'R') weather.shower();
+});
+
 let started = false;
 document.getElementById('enterBtn').addEventListener('click', function () {
   initAudio();
   resumeAudio();
+  player.lock();
   const ov = document.getElementById('overlay');
   ov.classList.add('fadeOut');
   setTimeout(function () { ov.style.display = 'none'; }, 1700);
@@ -184,7 +212,7 @@ const clock = new THREE.Clock();
 
 // Said once each, the first time it happens. Observations, not instructions —
 // nothing here asks you to do anything about it.
-let saidDark = false, saidDawn = false;
+let saidDark = false, saidDawn = false, saidRain = false, saidGarden = false;
 
 function animate() {
   requestAnimationFrame(animate);
@@ -197,12 +225,25 @@ function animate() {
   // The day only starts turning once you are actually in the corn, but the
   // sky still has to be re-parked on the camera every frame, so this is a
   // zero-length step rather than a skipped one.
+  daylight.weather.fogBoost = weather.fogBoost;
+  daylight.weather.lightDamp = weather.lightDamp;
   daylight.update(started ? dt : 0, t);
 
   const night = daylight.night;
   setNight(night);
   farm.update(night);
   lanterns.update(t, night, camera.position);
+
+  // A frame behind the daylight it reads, which nothing can see.
+  weather.update(started ? dt : 0, camera.position, daylight.elevation, night, scene.fog.color);
+  setRain(weather.state.rain);
+
+  if (started) {
+    critters.update(dt, t, camera.position, night, critterVoice);
+    setDanger(critters.danger);
+    setBuzz(critters.buzz);
+    garden.update(dt, t, camera.position, function (dist) { critterVoice('drip', dist); });
+  }
 
   if (started && !saidDark && night > 0.97) {
     saidDark = true;
@@ -211,6 +252,14 @@ function animate() {
   if (started && saidDark && !saidDawn && night < 0.03 && daylight.elevation > 0) {
     saidDawn = true;
     toast('morning, and the mist is still in the rows', 5200);
+  }
+  if (started && !saidRain && weather.state.rain > 0.25) {
+    saidRain = true;
+    toast('rain, a little of it, going through the corn', 5200);
+  }
+  if (started && !saidGarden && garden.inside(camera.position)) {
+    saidGarden = true;
+    toast('somebody rakes this. the lines will close over your prints', 6000);
   }
 
   for (let f = 0; f < fireflies.length; f++) {

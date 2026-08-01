@@ -44,7 +44,16 @@ things to notice, places to rest, texture and detail.
 - `src/farm.js` — the world outside the maze: stubble, dirt track, barn,
   tractor, bales, fence, scarecrow, treeline, and a bench to sit on.
 - `src/lanterns.js` — lanterns on stakes along the corridors, so the
-  night is walkable.
+  night is walkable. Takes an `extra` list of flames that belong to
+  other modules, so they compete for the same three lights.
+- `src/zen.js` — the raked garden in the clearing at the centre of the
+  maze. The gravel is a canvas the player scuffs and that heals itself.
+- `src/critters.js` — every animal. All billboards; the friendly ones
+  emerge, watch and leave, the dangerous ones bluff. Big animals walk
+  the maze grid, small ones go through the corn.
+- `src/weather.js` — cloud and rain. Owns one tiling noise texture that
+  is both the cloud you see overhead and the shadow it casts, patched
+  into every lit material in the scene from `main.js`.
 
 ## Technical constraints — please respect these
 
@@ -78,6 +87,16 @@ to see the corridor they are standing in. Three things guarantee that
 together — the `NIGHT` palette's `hemiI`/`ambI` floor, moonlight, and
 the lanterns. Do not lower any of them for realism without checking the
 other two still carry it.
+
+**The corn casts shadows but does not receive them.** A billboard's
+normal is flipped to face the camera, which is the only reason a wall of
+flat quads reads as a lit plant. Shadow receiving samples by world
+position instead, so switching it on mottles the wall with the shadows
+of the leaves in front of it and turns the field a dark blotchy olive.
+The shadows worth having are the ones thrown across the corridor floor.
+Whatever else changes, the corn's `customDepthMaterial` must keep the
+same wind displacement as its surface material, or the plants sway while
+their shadows stand still.
 
 **Only three point lights ever burn at once.** The corn is one
 instanced mesh of ~11k quads, so every light in the scene is paid for by

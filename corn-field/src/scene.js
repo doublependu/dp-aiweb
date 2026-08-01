@@ -27,6 +27,17 @@ const LUNAR_DAYS = 7;
 // lumen more — the lanterns are meant to be worth having.
 const MOON_INTENSITY = 0.30;
 
+// The sun's shadow. The map covers a box this many metres either side of the
+// player rather than the whole farm: at 2048 pixels that is about three
+// centimetres to a texel, which is what it takes for a corn leaf to cast a
+// leaf-shaped shadow instead of a grey smudge. Anything further off than this
+// is in haze by then anyway.
+const SHADOW_REACH = 34;
+const SHADOW_MAP = 2048;
+// How far up the light sits. Only the direction matters to a directional
+// light, but the shadow camera's near and far planes are measured from here.
+const SUN_DISTANCE = 75;
+
 // =============================================================
 // PALETTES
 // =============================================================
@@ -241,6 +252,11 @@ function createDaylight(renderer, scene, sky, lights, camera) {
     return (ARC[lo][1] + (ARC[hi][1] - ARC[lo][1]) * t) * Math.PI / 180;
   }
 
+  // Written from outside by weather.js: how much extra haze there is and how
+  // much of the light the cloud is holding back. Folded into the palette here
+  // rather than replacing it, so a rainy dusk is still a dusk.
+  const weather = { fogBoost: 0, lightDamp: 0 };
+
   let elapsed = 0;
   // Somewhere between waxing gibbous and just past full, so the first night
   // always has a moon well up in it. It drifts from here.
@@ -263,22 +279,34 @@ function createDaylight(renderer, scene, sky, lights, camera) {
     const rising = Math.cos(theta) > 0;
     samplePalette(rising ? RISING : SETTING, elev);
 
-    // The sun keeps its direction but is pulled in close: a directional light
-    // has no position that matters beyond its bearing, and this keeps it out
-    // of the far clipping plane's way.
-    lights.sun.position.copy(_v).multiplyScalar(0.25);
+    // Under cloud the sun goes off first and hardest, and the flat light left
+    // behind is mostly sky — so the ambient terms lose much less than the
+    // beam does. Getting that ratio wrong is what makes overcast scenes read
+    // as "somebody turned the brightness down" instead of as weather.
+    const damp = weather.lightDamp;
+
+    // The sun keeps its direction but is pulled in close and carried along
+    // with the player: a directional light has no position that matters
+    // beyond its bearing, and this keeps the shadow map spent on the part of
+    // the field somebody is actually standing in.
+    lights.sun.position.copy(_v).normalize().multiplyScalar(SUN_DISTANCE).add(camera.position);
+    lights.sun.target.position.copy(camera.position);
+    lights.sun.target.updateMatrixWorld();
     lights.sun.color.copy(P.sun);
-    lights.sun.intensity = Math.max(0, P.sunI) * LEGACY_LIGHT_SCALE;
+    lights.sun.intensity = Math.max(0, P.sunI) * (1 - damp) * LEGACY_LIGHT_SCALE;
+    // Nothing to cast with, and a shadow pass costs the same whether the
+    // light is on or not.
+    lights.sun.castShadow = lights.sun.intensity > 0.02;
 
     lights.hemi.color.copy(P.hemiSky);
     lights.hemi.groundColor.copy(P.hemiGround);
-    lights.hemi.intensity = P.hemiI * LEGACY_LIGHT_SCALE;
+    lights.hemi.intensity = P.hemiI * (1 - damp * 0.30) * LEGACY_LIGHT_SCALE;
 
     lights.ambient.color.copy(P.amb);
-    lights.ambient.intensity = P.ambI * LEGACY_LIGHT_SCALE;
+    lights.ambient.intensity = P.ambI * (1 - damp * 0.15) * LEGACY_LIGHT_SCALE;
 
     scene.fog.color.copy(P.fog);
-    scene.fog.density = P.fogD;
+    scene.fog.density = P.fogD + weather.fogBoost;
     renderer.setClearColor(scene.fog.color);
 
     // 1 once the sun is under the horizon, 0 while it is up.
@@ -320,6 +348,8 @@ function createDaylight(renderer, scene, sky, lights, camera) {
   apply(0);
 
   return {
+    // weather.js writes here; see the note where it is declared.
+    weather: weather,
     // 0 while the sun is up, 1 once it is under the horizon. The right curve
     // to hang anything nocturnal off.
     get night() { return state.night; },
@@ -360,6 +390,12 @@ function createRenderer() {
 
   const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
   renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
+  // One shadow-casting light in the whole scene, so this is one extra pass
+  // over the corn per frame and nothing else. PCF rather than the soft
+  // variant: r185 deprecated PCFSoftShadowMap and silently falls back to this
+  // anyway, and asking for it only earns a warning on the first frame.
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFShadowMap;
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.setClearColor(HAZE);
@@ -370,6 +406,24 @@ function createRenderer() {
 function addLights(scene) {
   const sun = new THREE.DirectionalLight(AFTERNOON.sun, AFTERNOON.sunI * LEGACY_LIGHT_SCALE);
   scene.add(sun);
+  // The target is moved to the player every frame, so it has to be in the
+  // scene graph to have its matrix updated.
+  scene.add(sun.target);
+
+  sun.castShadow = true;
+  sun.shadow.mapSize.set(SHADOW_MAP, SHADOW_MAP);
+  sun.shadow.camera.left = -SHADOW_REACH;
+  sun.shadow.camera.right = SHADOW_REACH;
+  sun.shadow.camera.top = SHADOW_REACH;
+  sun.shadow.camera.bottom = -SHADOW_REACH;
+  sun.shadow.camera.near = 5;
+  sun.shadow.camera.far = SUN_DISTANCE + SHADOW_REACH * 2.4;
+  // Corn is vertical alpha-tested quads, which is the worst case there is for
+  // shadow acne: for most of the day some of them lie nearly along the light.
+  // normalBias does the heavy lifting; the constant bias is what stops a
+  // stalk from shadowing its own base at a low sun.
+  sun.shadow.bias = -0.0006;
+  sun.shadow.normalBias = 0.09;
 
   // A second directional light for the moon: cold, weak, and the only thing
   // with a direction to it once the sun has gone.
@@ -437,5 +491,6 @@ function addGround(scene, isOpen, maxAniso) {
   );
   floor.rotation.x = -Math.PI / 2;
   floor.position.y = 0.01;
+  floor.receiveShadow = true;
   scene.add(floor);
 }

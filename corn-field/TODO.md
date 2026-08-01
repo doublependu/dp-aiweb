@@ -1,33 +1,6 @@
 # TODO
 
-1. Please put an interactive zen garden in the middle of the maize maze
-
-2. Add some friendly animals in the maze. They'd occasionally wonder out, look at you and hurry away
-   - racoon
-   - deer
-   - mouse
-   - wild turkey
-   - crows (fly in, fly out)
-   - and others you can think of
-   - small animals can go through and between corn stalks, while big animals, like deer, will need to follow the maze path like you. 
-
-3. Add some dangerous animals in the maze
-   - snake
-   - bee
-   - and others you can think of
-   - they should look a little bit threatening, the background sound should indicate danger
-   - they don't really attack: if you walk past them then they'll run away
-   - if you start to run away from them then they might chase you a little bit. 
-
-4. the corn stalk should cast shadows
-
-5. Add weather
-   - light rain sometimes
-   - cloud move in the sky and cast shadow on the ground and corn stalk
-
-6. Use PointerLockControls for using mouse to look around
-
-
+(nothing outstanding)
 
 # Done
 
@@ -64,6 +37,52 @@
    block of corn in a worked field, so you can see where it starts and
    ends from outside it.
 
+7. **A zen garden in the middle of the maze.** `zen.js`, in a clearing
+   `maze.js` opens at the centre — the middle three-by-three block of
+   cells, so four corridors run into it and it is a place rather than a
+   junction. Raked gravel, three stones, a water basin with a bamboo
+   spout, and a stone lantern that takes its turn in the lantern pool
+   instead of adding a fourth light. Two things answer back: the gravel
+   keeps your footprints and loses them again over about half a minute,
+   and the basin drips more often while you are standing at it — a note
+   and a ring on the water each time. Neither is counted.
+
+8. **Animals.** `critters.js`. Deer, wild turkey, raccoon, rabbit and
+   mouse come to the edge of the path, look at you, and go. Deer and
+   turkeys are too big for the corn and walk the corridors like you do
+   (breadth-first over the same grid); the small ones push straight
+   through the stalks and are hidden by them rather than by a fade.
+   Crows fly over, and about half the time one drops onto a corn wall,
+   says what it thinks of you, and carries on.
+
+9. **Animals that mean it.** A snake across the path, bees over a patch
+   of ground, and one spider in a web at head height. They look worse
+   than they are: walk past and they leave, back away and the snake or
+   the bees may follow a couple of metres before thinking better of it,
+   and nothing can reach you or ever will. A low note in `audio.js`
+   comes up with how close and how bothered the nearest one is; the
+   snake rattles, the bees are a level rather than an event, and the
+   spider just climbs its thread and waits.
+
+10. **Corn casts shadows.** One shadow-casting light in the scene, the
+    sun, with the shadow camera carried along with the player so the map
+    is spent where somebody is standing. The corn's depth material gets
+    the same wind displacement as its surface material, or eleven
+    thousand plants would sway while their shadows stood still. The corn
+    casts but does not receive — see the note in `corn.js` for why.
+
+11. **Weather.** `weather.js`. Cloud drifts overhead all the time and
+    the same map is read again by everything the sun lights, so the
+    shadow crossing the field is the shadow of the cloud you can see.
+    Showers come every four to nine minutes and last one to three; the
+    light goes flat a minute before the first drop. Rain is short line
+    segments in a column that follows the camera, and its own band of
+    hiss in the sound.
+
+12. **Mouse look.** `PointerLockControls`, entered by clicking, escaped
+    with escape. Drag-to-look is still there for anything without a
+    pointer to lock. The arrow keys now walk the way the arrow points.
+
 # Also changed along the way
 
 - Stars, a milky way, and the occasional shooting star.
@@ -72,8 +91,11 @@
 - You can look further up than before — a full moon at midnight sat
   above the old pitch limit.
 - A bench under a tree past the exit. Nothing happens there.
+- `r` starts a shower, for looking at the rain without waiting for it.
 
 # Ideas, unstarted
 
 - The kernels are unexplained. Perhaps they should stay that way.
-- Somewhere to sit *inside* the maze, not only outside it.
+- The garden is the only place inside the maze worth stopping at, and
+  there is still nowhere to sit in it.
+- The deer never come out into the farm, only the corridors.

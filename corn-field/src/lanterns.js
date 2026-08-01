@@ -25,7 +25,11 @@ const HEIGHT = 2.05;
 // tracks the old curve closely enough for anywhere you can stand.
 const FALLOFF_GAIN = 1.78;
 
-export function createLanterns(isOpen, rooms, entrance, exit) {
+// `extra` is for flames that belong to something else — the garden's stone
+// lantern builds its own body and its own glow, and hands the flame here so
+// that it competes for one of the three real lights like everything else
+// rather than quietly becoming a fourth.
+export function createLanterns(isOpen, rooms, entrance, exit, extra) {
   const group = new THREE.Group();
   const lanterns = [];
 
@@ -92,9 +96,15 @@ export function createLanterns(isOpen, rooms, entrance, exit) {
     pool.push(light);
   }
 
+  // Only the posts this module put there; anything handed in through `extra`
+  // is somebody else's to be solid or not.
   const obstacles = lanterns.map(function (l) {
     return { x: l.x, z: l.z, r: 0.3 };
   });
+
+  if (extra) {
+    for (let i = 0; i < extra.length; i++) lanterns.push(extra[i]);
+  }
 
   return {
     group: group,

@@ -43,6 +43,19 @@ export function createFarm(entrance, exit, maxAniso) {
   addScarecrow(group, obstacles, entrance);
   addRestSpot(group, obstacles, exit, treeTex);
 
+  // Shadows, decided in one place because the rule is the same for the whole
+  // farm: solid things cast and receive; the ground and the track only
+  // receive; and the two instanced fields cast nothing. Seventeen thousand
+  // tufts of stubble would put a second pass over the whole field to draw a
+  // fringe of shadow half a metre long, and the treeline is a hundred metres
+  // out, well past anything the shadow camera covers.
+  group.traverse(function (o) {
+    if (!o.isMesh) return;
+    o.receiveShadow = true;
+    const flat = Math.abs(o.rotation.x + Math.PI / 2) < 0.01;
+    o.castShadow = !o.isInstancedMesh && !flat;
+  });
+
   return {
     group: group,
     obstacles: obstacles,
