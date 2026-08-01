@@ -1,6 +1,20 @@
 # TODO
 
-(nothing outstanding)
+1. Add some glowing animated portals that takes you to other web experiences when going through it 
+   - the portals should be parallel to the walls of maize maze, and distributed randomly in the maze
+   - create portals that lead to the following web apps / urls
+      - https://wave-racer.vercel.app/
+      - https://apex-formula-2026.vercel.app/
+      - https://genex.games/world/skate
+      - https://play.mint.gg/complete-shelf
+      - https://starknightt.github.io/operation-ironhold/
+      - https://mrdoob.github.io/toys/
+      - https://nuketown.luckeysystems.com/
+      - https://maize.live
+   - most portals should have a sign next to it, that has the name of the game / experience and maybe screenshot or game play video. 
+      - some portals can be mysterious and without such label
+   - for the visual of the portal: consider the minecraft purple portal as a reference. I want better graphics. 
+
 
 # Done
 
