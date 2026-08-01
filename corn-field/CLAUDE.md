@@ -54,6 +54,9 @@ things to notice, places to rest, texture and detail.
 - `src/weather.js` — cloud and rain. Owns one tiling noise texture that
   is both the cloud you see overhead and the shadow it casts, patched
   into every lit material in the scene from `main.js`.
+- `src/portals.js` — eight lit doorways set into the corn walls, each
+  one a link out to somebody else's web thing. Owns the destination
+  list, the sheet shader, and the painted signs beside most of them.
 
 ## Technical constraints — please respect these
 
@@ -97,6 +100,16 @@ The shadows worth having are the ones thrown across the corridor floor.
 Whatever else changes, the corn's `customDepthMaterial` must keep the
 same wind displacement as its surface material, or the plants sway while
 their shadows stand still.
+
+**A portal is the only thing that leaves.** Walking into one navigates
+away from the page, which is the single most destructive act available
+in a piece with no fail state — so it is deliberately not instant. The
+threshold in `portals.js` charges over about six tenths of a second of
+standing in the sheet and falls back faster than it fills, so brushing
+past a door does nothing and stepping back out of one cancels it. Do
+not make this a plain distance test. The door also has to stay set
+*into* a wall rather than across a corridor: the corn behind it is what
+makes overshooting impossible.
 
 **Only three point lights ever burn at once.** The corn is one
 instanced mesh of ~11k quads, so every light in the scene is paid for by

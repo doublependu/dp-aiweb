@@ -15,10 +15,11 @@ import { createLanterns } from './lanterns.js';
 import { createGarden } from './zen.js';
 import { createCritters } from './critters.js';
 import { createWeather } from './weather.js';
+import { createPortals } from './portals.js';
 import { createPlayer } from './player.js';
 import {
   initAudio, resumeAudio, toggleSound, setNight, chime, rustle,
-  setRain, setDanger, setBuzz, critterVoice
+  setRain, setDanger, setBuzz, setPortal, portalEnter, critterVoice
 } from './audio.js';
 
 const reduceMotion = window.matchMedia &&
@@ -50,6 +51,12 @@ scene.add(lanterns.group);
 const critters = createCritters(isOpen, maxAniso);
 scene.add(critters.group);
 
+// After the lanterns, so a door is never put where a lantern post already
+// stands in the way of walking into it.
+const portals = createPortals(isOpen, rooms, maze.startPos, exitPos,
+                              lanterns.obstacles, leaveTheField);
+scene.add(portals.group);
+
 // Everything lit by the sun is also shaded by whatever gets in the sun's way,
 // so the cloud patch goes on after the world is built and before anything has
 // had a chance to compile. The sky's own group is skipped: it is not lit, and
@@ -66,7 +73,7 @@ const player = createPlayer({
   startPos: maze.startPos,
   exitPos: exitPos,
   reduceMotion: reduceMotion,
-  obstacles: farm.obstacles.concat(lanterns.obstacles, garden.obstacles),
+  obstacles: farm.obstacles.concat(lanterns.obstacles, garden.obstacles, portals.obstacles),
   onStep: rustle
 });
 
@@ -113,6 +120,41 @@ const exitPillar = new THREE.Mesh(
 exitPillar.position.set(exitPos.x, 1.7, exitPos.z);
 scene.add(exitPillar);
 let exitSeen = false;
+
+// =============================================================
+// THE WAY OUT THAT IS NOT THE WAY OUT
+// =============================================================
+// Called by portals.js once a door has committed, which takes about six tenths
+// of a second of standing in one. From here it is a fade and a navigation.
+//
+// Same tab, deliberately. window.open would need to be inside the call stack
+// of a gesture and this happens in a frame, so it would be swallowed by the
+// popup blocker about as often as not; and going back is one key away, which
+// is the gentlest exit available. The field is regenerated when you return,
+// which is the right answer for a maze nobody is meant to be memorising.
+let leavingFor = null;
+
+function leaveTheField(dest) {
+  if (leavingFor) return;
+  leavingFor = dest;
+  portalEnter();
+
+  // Let go of the mouse before the next page has to deal with it.
+  if (document.pointerLockElement) document.exitPointerLock();
+
+  const el = document.getElementById('portalFade');
+  const b = new THREE.Color(dest.b);
+  const mid = 'rgb(' + Math.round(b.r * 255) + ',' + Math.round(b.g * 255) + ',' +
+              Math.round(b.b * 255) + ')';
+  el.style.background = 'radial-gradient(ellipse at 50% 52%, ' + mid +
+                        ' 0%, #170b28 62%, #05030a 100%)';
+  // Named if it had a sign, and left unnamed if it did not — a door with
+  // nothing written on it should not announce itself on the way through.
+  el.querySelector('.dest').textContent = dest.name || '';
+  el.classList.add('on');
+
+  setTimeout(function () { window.location.href = dest.url; }, 1450);
+}
 
 // =============================================================
 // FIREFLIES
@@ -213,6 +255,7 @@ const clock = new THREE.Clock();
 // Said once each, the first time it happens. Observations, not instructions —
 // nothing here asks you to do anything about it.
 let saidDark = false, saidDawn = false, saidRain = false, saidGarden = false;
+let saidPortal = false;
 
 function animate() {
   requestAnimationFrame(animate);
@@ -245,6 +288,12 @@ function animate() {
     garden.update(dt, t, camera.position, function (dist) { critterVoice('drip', dist); });
   }
 
+  // The doors keep turning over before you have started and after you have
+  // gone: they are the only thing in the field that has to look alive in the
+  // frame the page is taken away in.
+  portals.update(dt, t, camera.position, night);
+  setPortal(portals.level);
+
   if (started && !saidDark && night > 0.97) {
     saidDark = true;
     toast('the field has gone blue. the lanterns are lit', 5200);
@@ -260,6 +309,12 @@ function animate() {
   if (started && !saidGarden && garden.inside(camera.position)) {
     saidGarden = true;
     toast('somebody rakes this. the lines will close over your prints', 6000);
+  }
+  // Said the first time one is close enough to matter, so that walking into
+  // one is a thing you chose rather than a thing that happened to you.
+  if (started && !saidPortal && portals.level > 0.55) {
+    saidPortal = true;
+    toast('a door in the corn, and not made of corn. step into it and the field lets you go', 7000);
   }
 
   for (let f = 0; f < fireflies.length; f++) {
@@ -315,7 +370,9 @@ function animate() {
     }
   }
 
-  if (started) player.update(dt);
+  // Once a door has you, you stop walking. The field keeps going without you,
+  // which is the point of it.
+  if (started && !leavingFor) player.update(dt);
 
   renderer.render(scene, camera);
 }

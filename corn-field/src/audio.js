@@ -19,13 +19,14 @@ export function setNight(n) {
   }
 }
 
-// Three sounds that are levels rather than events: the rain, the low note
-// that comes up when something with a temper has noticed you, and bees. Each
-// is one voice running the whole time at a gain of nought, ramped rather than
-// switched so it can never click.
+// Four sounds that are levels rather than events: the rain, the low note that
+// comes up when something with a temper has noticed you, bees, and the doors.
+// Each is one voice running the whole time at a gain of nought, ramped rather
+// than switched so it can never click.
 let rainGain = null;
 let dangerGain = null, dangerOsc = null;
 let buzzGain = null, buzzOsc = null;
+let portalGain = null, portalBp = null, portalDrone = null;
 
 // Must be called from a user gesture; browsers will not start a context otherwise.
 export function initAudio() {
@@ -66,6 +67,7 @@ export function initAudio() {
   buildRain();
   buildDanger();
   buildBuzz();
+  buildPortal();
 
   bird(); insect(); cricket(); owl();
 }
@@ -141,10 +143,55 @@ function buildBuzz() {
   vib.start();
 }
 
-// These three are called every frame. Scheduling a ramp sixty times a second
+// A portal is breath rather than a note: a band of noise wandering slowly up
+// and down under two low tones a fifth apart. A pitched drone alone sounds
+// like a machine left running, and the noise alone sounds like more wind —
+// together they sit somewhere neither the field nor the weather goes.
+function buildPortal() {
+  portalGain = actx.createGain();
+  portalGain.gain.value = 0;
+  portalGain.connect(master);
+
+  const len = actx.sampleRate * 3;
+  const buf = actx.createBuffer(1, len, actx.sampleRate);
+  const d = buf.getChannelData(0);
+  for (let n = 0; n < len; n++) d[n] = Math.random() * 2 - 1;
+  const src = actx.createBufferSource();
+  src.buffer = buf; src.loop = true;
+
+  portalBp = actx.createBiquadFilter();
+  portalBp.type = 'bandpass';
+  portalBp.frequency.value = 700;
+  portalBp.Q.value = 3.4;
+
+  const air = actx.createGain(); air.gain.value = 1.6;
+  src.connect(portalBp); portalBp.connect(air); air.connect(portalGain);
+  src.start();
+
+  // The sweep is slow enough that you never hear it turn round.
+  const lfo = actx.createOscillator(); lfo.frequency.value = 0.085;
+  const amt = actx.createGain(); amt.gain.value = 300;
+  lfo.connect(amt); amt.connect(portalBp.frequency);
+  lfo.start();
+
+  portalDrone = [];
+  const freqs = [82.4, 123.5, 164.8];
+  for (let i = 0; i < freqs.length; i++) {
+    const o = actx.createOscillator();
+    o.type = 'sine';
+    o.frequency.value = freqs[i] * (1 + (Math.random() - 0.5) * 0.004);
+    const g = actx.createGain();
+    g.gain.value = [0.36, 0.22, 0.10][i];
+    o.connect(g); g.connect(portalGain);
+    o.start();
+    portalDrone.push(o);
+  }
+}
+
+// These four are called every frame. Scheduling a ramp sixty times a second
 // piles up events for no audible gain, so each only speaks when it has
 // something new to say.
-let lastRain = -1, lastDanger = -1, lastBuzz = -1;
+let lastRain = -1, lastDanger = -1, lastBuzz = -1, lastPortal = -1;
 
 export function setRain(level) {
   if (!rainGain || !actx || Math.abs(level - lastRain) < 0.01) return;
@@ -166,6 +213,30 @@ export function setBuzz(level) {
   lastBuzz = level;
   buzzGain.gain.setTargetAtTime(0.05 * level, actx.currentTime, 0.25);
   buzzOsc.frequency.setTargetAtTime(196 + 60 * level, actx.currentTime, 0.4);
+}
+
+// Squared, so a door thirty metres off is nearly silent and one you are
+// standing in front of is unmistakable — the same shape the danger note uses,
+// for the same reason.
+export function setPortal(level) {
+  if (!portalGain || !actx || Math.abs(level - lastPortal) < 0.01) return;
+  lastPortal = level;
+  portalGain.gain.setTargetAtTime(0.075 * level * level, actx.currentTime, 0.45);
+  portalBp.Q.setTargetAtTime(3.4 + 3.0 * level, actx.currentTime, 0.6);
+  portalDrone[0].frequency.setTargetAtTime(82.4 + 5 * level, actx.currentTime, 0.7);
+}
+
+// Going through. One swell up and out, long enough to still be arriving when
+// the page it belongs to is already gone.
+export function portalEnter() {
+  if (!actx || !soundOn) return;
+  slide(140, 1180, 1.35, 'sine', 0.11, 0);
+  slide(210, 1770, 1.20, 'triangle', 0.045, 0);
+  for (let i = 0; i < 9; i++) {
+    setTimeout(function () {
+      noise(0.34, 500 + i * 460, 1.1, 0.055, (Math.random() - 0.5) * 1.2);
+    }, i * 110);
+  }
 }
 
 // =============================================================

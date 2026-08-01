@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>portals — a look at all eight</title>
+    <style>
+      html, body { margin: 0; height: 100%; overflow: hidden; background: #12101a; }
+      canvas { display: block; }
+      #tip {
+        position: fixed; left: 0; right: 0; bottom: 12px; text-align: center;
+        color: #cbb8e0; font: 13px Georgia, serif; opacity: 0.7; pointer-events: none;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="tip">drag to turn &middot; W/S to walk the row &middot; all eight doors, lined up out of the maze</div>
+    <script type="module">
+      // Disposable. The portals are scattered through a nine-by-nine maze and
+      // half of them are round a corner from wherever you happen to be, which
+      // is right for the piece and useless for looking at the eight of them
+      // side by side. This page is only that: no corn, no weather, no cycle.
+      import * as THREE from 'three';
+      import { createMaze, openRooms } from './src/maze.js';
+      import { createPortals } from './src/portals.js';
+
+      const scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x14111c);
+      scene.fog = new THREE.Fog(0x14111c, 14, 46);
+
+      const camera = new THREE.PerspectiveCamera(62, innerWidth / innerHeight, 0.1, 200);
+      const q = new URLSearchParams(location.search);
+      camera.position.set(+(q.get('x') || 0), +(q.get('y') || 1.62), +(q.get('z') || 7.5));
+      camera.rotation.order = 'YXZ';
+
+      const renderer = new THREE.WebGLRenderer({ antialias: true });
+      renderer.setSize(innerWidth, innerHeight);
+      renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+      document.body.appendChild(renderer.domElement);
+
+      scene.add(new THREE.HemisphereLight(0x8090b0, 0x2a2418, 1.6));
+      const key = new THREE.DirectionalLight(0xffe6c0, 1.9);
+      key.position.set(6, 12, 9);
+      scene.add(key);
+
+      const ground = new THREE.Mesh(
+        new THREE.PlaneGeometry(120, 120),
+        new THREE.MeshStandardMaterial({ color: 0x3a3226, roughness: 1 })
+      );
+      ground.rotation.x = -Math.PI / 2;
+      scene.add(ground);
+
+      const maze = createMaze();
+      const rooms = openRooms(maze.isOpen);
+      const portals = createPortals(maze.isOpen, rooms, maze.startPos, maze.exitPos, [],
+                                    function (d) { console.log('would leave for', d.url); });
+      scene.add(portals.group);
+
+      // Out of the maze and into a row, four metres apart, all facing the camera.
+      const doors = portals.group.children;
+      console.log('portals placed:', doors.length);
+      for (let i = 0; i < doors.length; i++) {
+        doors[i].position.set((i - (doors.length - 1) / 2) * 4.2, 0, 0);
+        doors[i].rotation.y = 0;
+      }
+
+      let yaw = 0, pitch = 0, drag = false, lx = 0, ly = 0;
+      const keys = {};
+      addEventListener('keydown', e => keys[e.key.toLowerCase()] = true);
+      addEventListener('keyup', e => keys[e.key.toLowerCase()] = false);
+      renderer.domElement.addEventListener('pointerdown', e => { drag = true; lx = e.clientX; ly = e.clientY; });
+      addEventListener('pointerup', () => drag = false);
+      addEventListener('pointermove', e => {
+        if (!drag) return;
+        yaw -= (e.clientX - lx) * 0.004;
+        pitch = Math.max(-0.6, Math.min(0.9, pitch - (e.clientY - ly) * 0.004));
+        lx = e.clientX; ly = e.clientY;
+      });
+      addEventListener('resize', () => {
+        camera.aspect = innerWidth / innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(innerWidth, innerHeight);
+      });
+
+      const clock = new THREE.Clock();
+      (function loop() {
+        requestAnimationFrame(loop);
+        const dt = Math.min(clock.getDelta(), 0.05);
+        if (keys.a) camera.position.x -= 4 * dt;
+        if (keys.d) camera.position.x += 4 * dt;
+        if (keys.w) camera.position.z -= 4 * dt;
+        if (keys.s) camera.position.z += 4 * dt;
+        camera.rotation.set(pitch, yaw, 0);
+        portals.update(dt, clock.elapsedTime, camera.position, 1);
+        renderer.render(scene, camera);
+      })();
+    </script>
+  </body>
+</html>

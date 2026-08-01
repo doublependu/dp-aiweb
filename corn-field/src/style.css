@@ -111,6 +111,32 @@ canvas { display: block; }
   line-height: 1.5;
 }
 
+/* What you see on the way through a door. Sits under the vignette and over
+   everything else, and is the only full-screen thing in the piece that is not
+   the opening overlay — the field going out is meant to feel like the field
+   going out, not like a loading screen. */
+#portalFade {
+  position: fixed;
+  inset: 0;
+  z-index: 7;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 1.25s ease-in;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #f0dcff;
+  font-size: 1.5em;
+  letter-spacing: 0.06em;
+  text-shadow: 0 2px 18px rgba(0, 0, 0, 0.7);
+}
+#portalFade.on { opacity: 1; }
+#portalFade .dest {
+  opacity: 0;
+  transition: opacity 0.9s ease 0.5s;
+}
+#portalFade.on .dest { opacity: 0.9; }
+
 #soundToggle {
   position: fixed;
   top: 18px;

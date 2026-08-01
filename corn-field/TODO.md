@@ -1,20 +1,6 @@
 # TODO
 
-1. Add some glowing animated portals that takes you to other web experiences when going through it 
-   - the portals should be parallel to the walls of maize maze, and distributed randomly in the maze
-   - create portals that lead to the following web apps / urls
-      - https://wave-racer.vercel.app/
-      - https://apex-formula-2026.vercel.app/
-      - https://genex.games/world/skate
-      - https://play.mint.gg/complete-shelf
-      - https://starknightt.github.io/operation-ironhold/
-      - https://mrdoob.github.io/toys/
-      - https://nuketown.luckeysystems.com/
-      - https://maize.live
-   - most portals should have a sign next to it, that has the name of the game / experience and maybe screenshot or game play video. 
-      - some portals can be mysterious and without such label
-   - for the visual of the portal: consider the minecraft purple portal as a reference. I want better graphics. 
-
+*(nothing outstanding)*
 
 # Done
 
@@ -96,6 +82,31 @@
 12. **Mouse look.** `PointerLockControls`, entered by clicking, escaped
     with escape. Drag-to-look is still there for anything without a
     pointer to lock. The arrow keys now walk the way the arrow points.
+
+13. **Portals.** `portals.js`. Eight doorways set into the corn walls,
+    facing down the corridors, each one a link out to somebody else's
+    web thing. The sheet is a domain-warped noise flow in a shader,
+    falling like the nether portal it is quoting but feathered into its
+    frame rather than ending on a hard rectangle, drawn on an unfogged
+    black backing so you cannot see the corn through the hole. Every
+    door has its own three colours, so eight of them read as eight
+    places rather than eight copies. A frame of hewn obsidian, a pool of
+    its own light painted on the floor in front of it, and specks coming
+    off the surface — and no PointLight at all, because there are only
+    three of those and the lanterns need them.
+
+    Six have a painted board on posts beside them with the name and a
+    line; two are unlabelled on purpose. The boards are canvas
+    paintings of each destination rather than screenshots — a real
+    thumbnail would mean a file on disk and a network fetch, and this
+    stays one clone away from running.
+
+    Walking in is not a plain distance test. The threshold charges over
+    about six tenths of a second of standing in the sheet and drains
+    faster than it fills, so brushing past a door does nothing and
+    stepping back out cancels it. When it does commit the field fades
+    to the door's own colour, the sound swells, and the page goes. Same
+    tab: back is one key, and the field is regenerated when you return.
 
 # Also changed along the way
 
