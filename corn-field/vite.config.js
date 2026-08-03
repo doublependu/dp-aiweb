@@ -1,7 +1,6 @@
 import { defineConfig } from 'vite'
 
 export default defineConfig({
-  base: '/dp-aiweb/app0/', 
+  base: '/dp-aiweb/corn-field/', 
 })
-
 

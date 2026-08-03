@@ -1,0 +1,51 @@
+name: Deploy Multiple Projects to GitHub Pages
+
+on:
+  push:
+    branches:
+      - main # Or your default branch name
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: 'npm'
+          # If package-lock.json is only inside subfolders, remove the cache line
+
+      # --- Build Project One ---
+      - name: Install and Build Project One
+        run: |
+          cd app0
+          npm install
+          npm run build
+
+      # --- Build Project Two ---
+      - name: Install and Build Project Two
+        run: |
+          cd corn-field
+          npm install
+          npm run build
+
+      # --- Merge Outputs into a Single Deployment Folder ---
+      - name: Prepare Deployment Directory
+        run: |
+          mkdir combined-dist
+          cp -r app0/dist ./combined-dist/app0
+          cp -r corn-field/dist ./combined-dist/corn-field
+
+      # --- Deploy to gh-pages branch ---
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./combined-dist
