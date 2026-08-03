@@ -443,22 +443,3 @@ function owl() {
 export function chime() {
   tone(1350 + Math.random() * 520, 0.65, 'sine', 0.085, 0);
 }
-
-export function rustle() {
-  if (!actx || !soundOn) return;
-  const dur = 0.2;
-  const b = actx.createBuffer(1, (actx.sampleRate * dur) | 0, actx.sampleRate);
-  const d = b.getChannelData(0);
-  for (let i = 0; i < d.length; i++) {
-    const env = 1 - i / d.length;
-    d[i] = (Math.random() * 2 - 1) * env * env;
-  }
-  const src = actx.createBufferSource(); src.buffer = b;
-  const bp = actx.createBiquadFilter();
-  bp.type = 'bandpass';
-  bp.frequency.value = 2000 + Math.random() * 1700;
-  bp.Q.value = 0.7;
-  const g = actx.createGain(); g.gain.value = 0.055;
-  src.connect(bp); bp.connect(g); g.connect(master);
-  src.start();
-}

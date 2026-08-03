@@ -18,7 +18,7 @@ import { createWeather } from './weather.js';
 import { createPortals } from './portals.js';
 import { createPlayer } from './player.js';
 import {
-  initAudio, resumeAudio, toggleSound, setNight, chime, rustle,
+  initAudio, resumeAudio, toggleSound, setNight, chime,
   setRain, setDanger, setBuzz, setPortal, portalEnter, critterVoice
 } from './audio.js';
 
@@ -73,8 +73,7 @@ const player = createPlayer({
   startPos: maze.startPos,
   exitPos: exitPos,
   reduceMotion: reduceMotion,
-  obstacles: farm.obstacles.concat(lanterns.obstacles, garden.obstacles, portals.obstacles),
-  onStep: rustle
+  obstacles: farm.obstacles.concat(lanterns.obstacles, garden.obstacles, portals.obstacles)
 });
 
 // =============================================================

@@ -13,7 +13,6 @@ export function createPlayer(options) {
   const domElement = options.domElement;
   const isOpen = options.isOpen;
   const reduceMotion = options.reduceMotion;
-  const onStep = options.onStep;
   // Solid things that are not corn: lantern posts, hay bales, the barn. A
   // circle if it has `r`, an oriented box if it has `hw`/`hd`.
   const obstacles = options.obstacles || [];
@@ -70,7 +69,7 @@ export function createPlayer(options) {
     lastX = e.clientX; lastY = e.clientY;
   });
 
-  let walkT = 0, stepMark = 0;
+  let walkT = 0;
 
   function blocked(x, z) {
     const fx = Math.round(x / CELL + (FINE - 1) / 2);
@@ -133,8 +132,6 @@ export function createPlayer(options) {
       // instead of stopping you dead.
       if (!blocked(nx, camera.position.z)) camera.position.x = nx;
       if (!blocked(camera.position.x, nz)) camera.position.z = nz;
-
-      if (walkT - stepMark > Math.PI) { stepMark = walkT; if (onStep) onStep(); }
     }
 
     camera.position.y = EYE + (mag > 0.001 && !reduceMotion ? Math.sin(walkT) * 0.042 : 0);
