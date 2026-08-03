@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/dp-aiweb/corn-field/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>A Field of Corn — a wander</title>
+    <script type="module" crossorigin src="/dp-aiweb/corn-field/assets/index-DT2OpDDC.js"></script>
+    <link rel="stylesheet" crossorigin href="/dp-aiweb/corn-field/assets/index-C8ZoDh2O.css">
+  </head>
+  <body>
+    <div id="overlay">
+      <h1>A Field of Corn</h1>
+      <p>No score, no clock, no wrong way to go.<br />Walk. Listen. Follow a firefly if one drifts past.</p>
+      <button id="enterBtn">Step into the corn</button>
+    </div>
+
+    <div id="vignette"></div>
+
+    <div id="hud" style="display: none">
+      <div class="kernels" id="kernelCount">kernels found: 0</div>
+      <div class="hint">W/S walk &middot; A/D step sideways<br />click to look with the mouse &middot; esc to let it go</div>
+    </div>
+
+    <div id="portalFade"><span class="dest"></span></div>
+
+    <div id="toast"></div>
+    <button id="soundToggle" style="display: none">&#128266; sound on</button>
+
+  </body>
+</html>
