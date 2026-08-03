@@ -20,7 +20,9 @@ jobs:
         with:
           node-version: 24
           cache: 'npm'
-          # If package-lock.json is only inside subfolders, remove the cache line
+          cache-dependency-path: |
+            app0/package-lock.json
+            corn-field/package-lock.json
 
       # --- Build Project One ---
       - name: Install and Build Project One
