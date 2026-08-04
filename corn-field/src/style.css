@@ -137,10 +137,9 @@ canvas { display: block; }
 }
 #portalFade.on .dest { opacity: 0.9; }
 
-#soundToggle {
+#soundToggle, #newMazeBtn {
   position: fixed;
   top: 18px;
-  right: 18px;
   z-index: 6;
   background: rgba(32, 24, 8, 0.42);
   border: 1px solid rgba(247, 235, 203, 0.32);
@@ -152,7 +151,18 @@ canvas { display: block; }
   cursor: pointer;
   backdrop-filter: blur(4px);
 }
-#soundToggle:focus-visible {
+#soundToggle { right: 18px; }
+
+/* Quieter than the sound toggle it sits beside, because it throws the field
+   away and nothing that does that should be the brightest thing on screen. */
+#newMazeBtn {
+  right: 140px;
+  opacity: 0.62;
+  transition: opacity 0.25s ease;
+}
+#newMazeBtn:hover { opacity: 1; }
+
+#soundToggle:focus-visible, #newMazeBtn:focus-visible {
   outline: 2px solid #f7ebcb;
   outline-offset: 2px;
 }

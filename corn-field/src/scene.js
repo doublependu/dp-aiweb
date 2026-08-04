@@ -193,7 +193,12 @@ const ARC = [
   [1.000, 519]
 ];
 
-export function createScene(isOpen) {
+// `startElapsed` is how far into the cycle to open at — seconds, same units as
+// CYCLE_LENGTH. Restored from a save, so a field you left after dark is still
+// dark when you come back to it. Without it, walking out of a portal at
+// midnight and back in would put you in the middle of the afternoon, which is
+// a bigger break in the illusion than a different maze would be.
+export function createScene(isOpen, startElapsed) {
   const scene = new THREE.Scene();
   scene.fog = new THREE.FogExp2(HAZE, 0.020);
 
@@ -212,12 +217,12 @@ export function createScene(isOpen) {
   const lights = addLights(scene);
   addGround(scene, isOpen, maxAniso);
 
-  const daylight = createDaylight(renderer, scene, sky, lights, camera);
+  const daylight = createDaylight(renderer, scene, sky, lights, camera, startElapsed);
 
   return { scene, camera, renderer, maxAniso, daylight };
 }
 
-function createDaylight(renderer, scene, sky, lights, camera) {
+function createDaylight(renderer, scene, sky, lights, camera, startElapsed) {
   // Scratch: the sampled palette, rebuilt in place every frame.
   const P = {};
   for (let i = 0; i < COLOR_KEYS.length; i++) P[COLOR_KEYS[i]] = new THREE.Color();
@@ -257,7 +262,7 @@ function createDaylight(renderer, scene, sky, lights, camera) {
   // rather than replacing it, so a rainy dusk is still a dusk.
   const weather = { fogBoost: 0, lightDamp: 0 };
 
-  let elapsed = 0;
+  let elapsed = startElapsed || 0;
   // Somewhere between waxing gibbous and just past full, so the first night
   // always has a moon well up in it. It drifts from here.
   const moonPhi0 = 2.0 + Math.random() * 1.4;
@@ -355,6 +360,8 @@ function createDaylight(renderer, scene, sky, lights, camera) {
     get night() { return state.night; },
     // Sine of the sun's angle above the horizon: negative once it has set.
     get elevation() { return state.elevation; },
+    // Seconds into the cycle, for writing down on the way out.
+    get elapsed() { return elapsed; },
     update: function (dt, time) {
       elapsed += dt;
       state.time = time;

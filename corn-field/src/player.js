@@ -24,14 +24,25 @@ export function createPlayer(options) {
   });
   window.addEventListener('keyup', function (e) { keys[e.key.toLowerCase()] = false; });
 
-  // Face the way out to begin with — not as a hint, just so the first thing
-  // you see is a corridor rather than a wall.
-  let yaw = Math.atan2(options.exitPos.x - options.startPos.x, options.exitPos.z - options.startPos.z);
-  let pitch = 0;
+  // Where you open your eyes. `spawnPos`/`spawnYaw`/`spawnPitch` come from a
+  // save and put you back exactly as you were standing; without them it is the
+  // mouth of the maze, facing the way out — not as a hint, just so the first
+  // thing you see is a corridor rather than a wall.
+  const spawn = options.spawnPos || options.startPos;
+  let yaw = options.spawnYaw !== undefined && options.spawnYaw !== null
+    ? options.spawnYaw
+    : Math.atan2(options.exitPos.x - options.startPos.x, options.exitPos.z - options.startPos.z);
+  let pitch = options.spawnPitch !== undefined && options.spawnPitch !== null
+    ? options.spawnPitch
+    : 0;
   let dragging = false, lastX = 0, lastY = 0;
 
-  camera.position.set(options.startPos.x, EYE, options.startPos.z);
+  camera.position.set(spawn.x, EYE, spawn.z);
   camera.rotation.order = 'YXZ';
+  // Applied now rather than waiting for the first update(), which does not run
+  // until you have stepped in. A restored view should be the right way round
+  // in the frame behind the overlay, not swing into place when you click.
+  camera.rotation.set(pitch, yaw, 0);
 
   // Asymmetric on purpose, and the same limits both ways of looking. There is
   // nothing under your feet but a path, and there is a moon and a sky full of

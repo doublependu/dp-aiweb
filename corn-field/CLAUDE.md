@@ -57,6 +57,12 @@ things to notice, places to rest, texture and detail.
 - `src/portals.js` — eight lit doorways set into the corn walls, each
   one a link out to somebody else's web thing. Owns the destination
   list, the sheet shader, and the painted signs beside most of them.
+- `src/rng.js` — a seeded generator (mulberry32), so a field can be the
+  same field twice.
+- `src/save.js` — the field written down in `localStorage`, so walking
+  out through a door and pressing back brings you home. Every call is
+  wrapped: storage is allowed to say no, and a field that cannot be
+  saved must still be a field.
 
 ## Technical constraints — please respect these
 
@@ -109,7 +115,41 @@ standing in the sheet and falls back faster than it fills, so brushing
 past a door does nothing and stepping back out of one cancels it. Do
 not make this a plain distance test. The door also has to stay set
 *into* a wall rather than across a corridor: the corn behind it is what
-makes overshooting impossible.
+makes overshooting impossible. Going through is no longer permanent:
+the field is saved on the way out and the browser's back button brings
+you back to the same maze, standing where you were.
+
+**The world is built inside a seeded window, and the build must stay
+synchronous.** `main.js` swaps `Math.random` for a seeded generator
+before `createMaze` and puts the real one back immediately before
+`animate()`. That one line is what makes the whole field reproducible
+from a single number — the same stalks, lanterns, doors and scarecrow —
+without threading a generator through eight modules. Two things keep it
+true, and both are easy to break by accident:
+
+- *Nothing in the build may be asynchronous.* No `await`, no
+  `setTimeout`, no image `onload` between those two lines. Anything that
+  lands after the restore draws from the real `Math.random` and comes
+  out different every visit; worse, anything that lands after it
+  *sometimes* makes the field non-deterministic only on slow machines.
+- *Nothing in the animation loop may rely on the seeded stream.* Where
+  the critters wander and when it rains are deliberately not part of the
+  field's identity. Replaying them would make the place feel wound up
+  rather than alive.
+
+The maze itself additionally runs its own generator off the same seed,
+so corridors survive a three.js upgrade that shifts how much randomness
+startup consumes. Corridors are the thing somebody might actually learn.
+
+**A restored player starts inside a door, so doors start locked.**
+Coming back puts you exactly where you were standing, which is in the
+portal you just left through — and `portals.update()` runs every frame
+regardless of whether the player has started. Left alone it would
+re-charge immediately and throw you straight back out, forever.
+`lockAll()` holds every door until it has seen you step clear of it
+once. It is self-clearing on purpose: nothing has to remember to switch
+it off, because anything that has to be remembered here would eventually
+be forgotten in a frame that matters.
 
 **Only three point lights ever burn at once.** The corn is one
 instanced mesh of ~11k quads, so every light in the scene is paid for by

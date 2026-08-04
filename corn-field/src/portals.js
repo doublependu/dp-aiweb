@@ -173,7 +173,7 @@ export function createPortals(isOpen, rooms, entrance, exit, avoid, onEnter) {
       nx: s.outX, nz: s.outZ,       // out of the wall
       rx: s.rightX, rz: s.rightZ,   // along it
       mat: mat, halo: halo, pool: pool, motes: motes,
-      charge: 0, near: 0
+      charge: 0, near: 0, locked: false
     });
   }
 
@@ -185,6 +185,25 @@ export function createPortals(isOpen, rooms, entrance, exit, avoid, onEnter) {
 
     // How much portal is in earshot, 0..1. Read by the sound.
     level: 0,
+
+    // Come back through the browser's back button and you are restored exactly
+    // where you were standing — which is *inside* the door you just left
+    // through. It would start charging on the first frame and throw you
+    // straight back out, over and over, and there would be no way home.
+    //
+    // So a restored field locks every door, and each one lets itself go again
+    // the first frame it can see you are not in it. Every portal you are not
+    // standing in unlocks immediately; the one you are standing in unlocks as
+    // you step clear of it, and works normally when you walk back in. Nothing
+    // has to remember to switch this off, which is the only reason it is safe
+    // — `update` runs before you have started and after you have gone.
+    lockAll: function () {
+      taken = null;
+      for (let i = 0; i < portals.length; i++) {
+        portals[i].locked = true;
+        portals[i].charge = 0;
+      }
+    },
 
     update: function (dt, t, playerPos, night) {
       let loudest = 0;
@@ -209,7 +228,13 @@ export function createPortals(isOpen, rooms, entrance, exit, avoid, onEnter) {
         // sheet and there is no way round to the other side of it.
         const inDoor = along > -0.2 && along < TRIGGER && Math.abs(side) < OPEN_W * 0.5;
 
-        if (!taken) {
+        if (p.locked) {
+          // Held until you have been seen out of it once. It still lets go of
+          // whatever charge it was carrying, so a door restored mid-commit
+          // settles back down instead of sitting pinned at its brightest.
+          if (!inDoor) p.locked = false;
+          p.charge = Math.max(0, p.charge - CHARGE_DOWN * dt);
+        } else if (!taken) {
           p.charge = Math.max(0, Math.min(1,
             p.charge + (inDoor ? CHARGE_UP : -CHARGE_DOWN) * dt));
           if (p.charge >= 1) {

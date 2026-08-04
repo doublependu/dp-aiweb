@@ -5,6 +5,8 @@
 // texture, corn placement, collision) reads the same `isOpen` grid, so the
 // walls you see and the walls you bump into can never disagree.
 
+import { mulberry32, randomSeed } from './rng.js';
+
 export const ROOMS = 9;
 export const FINE = ROOMS * 2 + 1;
 export const CELL = 3.2;
@@ -23,7 +25,16 @@ export function toWorld(fx, fy) {
   return { x: (fx - (FINE - 1) / 2) * CELL, z: (fy - (FINE - 1) / 2) * CELL };
 }
 
-export function createMaze() {
+// The carve runs on its own seeded generator, even though main.js has already
+// swapped `Math.random` for a seeded one by the time this is called. The
+// corridors are the one thing that has to survive everything: drawn from the
+// shared stream, a three.js upgrade that generated one more UUID during
+// startup would shift every wall in a maze somebody had learned their way
+// around. Where a stalk leans can drift between versions. The maze cannot.
+export function createMaze(seed) {
+  const usedSeed = (typeof seed === 'number') ? (seed >>> 0) : randomSeed();
+  const rand = mulberry32(usedSeed);
+
   const isOpen = [];
   for (let i = 0; i < FINE; i++) {
     isOpen.push(new Array(FINE).fill(false));
@@ -32,7 +43,7 @@ export function createMaze() {
     for (let ry = 0; ry < ROOMS; ry++) isOpen[rx * 2 + 1][ry * 2 + 1] = true;
   }
 
-  carve(isOpen);
+  carve(isOpen, rand);
 
   // The clearing is opened after the carve, so the maze is a real maze first
   // and the middle of it is knocked through afterwards.
@@ -44,8 +55,8 @@ export function createMaze() {
 
   // A few extra openings create loops — dead ends are stressful, loops are calming.
   for (let loop = 0; loop < 7; loop++) {
-    const lx = 1 + ((Math.random() * (FINE - 2)) | 0);
-    const ly = 1 + ((Math.random() * (FINE - 2)) | 0);
+    const lx = 1 + ((rand() * (FINE - 2)) | 0);
+    const ly = 1 + ((rand() * (FINE - 2)) | 0);
     if ((lx % 2) !== (ly % 2)) isOpen[lx][ly] = true;
   }
 
@@ -55,6 +66,8 @@ export function createMaze() {
 
   return {
     isOpen,
+    // Handed back so main.js can write it down. This number is the field.
+    seed: usedSeed,
     entranceRow,
     exitRow,
     startPos: toWorld(1, entranceRow * 2 + 1),
@@ -62,7 +75,7 @@ export function createMaze() {
   };
 }
 
-function carve(isOpen) {
+function carve(isOpen, rand) {
   const seen = [];
   for (let a = 0; a < ROOMS; a++) seen.push(new Array(ROOMS).fill(false));
   const stack = [[0, 0]];
@@ -75,7 +88,7 @@ function carve(isOpen) {
       return nx >= 0 && ny >= 0 && nx < ROOMS && ny < ROOMS && !seen[nx][ny];
     });
     if (!opts.length) { stack.pop(); continue; }
-    const d2 = opts[(Math.random() * opts.length) | 0];
+    const d2 = opts[(rand() * opts.length) | 0];
     seen[cxr + d2[0]][cyr + d2[1]] = true;
     isOpen[cxr * 2 + 1 + d2[0]][cyr * 2 + 1 + d2[1]] = true;
     stack.push([cxr + d2[0], cyr + d2[1]]);
