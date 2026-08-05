@@ -35,12 +35,12 @@ import { FINE, CELL, CLEARING_C, CLEARING_HALF, toWorld } from './maze.js';
 // different violets rather than eight copies of one.
 export const DESTINATIONS = [
   {
-    url: 'https://wave-racer.vercel.app/',
+    url: 'https://wave-racer.vercel.app',
     name: 'Wave Racer', line: 'salt water, at speed', art: 'wave',
     a: 0x0d1a5c, b: 0x4a4bd6, c: 0xd8e6ff
   },
   {
-    url: 'https://apex-formula-2026.vercel.app/',
+    url: 'https://apex-formula-2026.vercel.app',
     name: 'Apex Formula 2026', line: 'the racing line', art: 'race',
     a: 0x3d0733, b: 0xc02a8e, c: 0xffd8f2
   },
@@ -50,12 +50,7 @@ export const DESTINATIONS = [
     a: 0x2a0b52, b: 0x9b3bd8, c: 0xf0d0ff
   },
   {
-    url: 'https://play.mint.gg/complete-shelf',
-    name: 'Complete Shelf', line: 'put it all in order', art: 'shelf',
-    a: 0x1e1240, b: 0x6a5ad8, c: 0xdcd6ff
-  },
-  {
-    url: 'https://starknightt.github.io/operation-ironhold/',
+    url: 'https://starknightt.github.io/operation-ironhold',
     name: 'Operation Ironhold', line: 'hold the line', art: 'ironhold',
     a: 0x2b0a2e, b: 0x7b2fb0, c: 0xe6c8ff
   },
@@ -64,8 +59,27 @@ export const DESTINATIONS = [
     name: 'Nuketown', line: 'a town, briefly', art: 'nuketown',
     a: 0x3a0d3a, b: 0xa733c0, c: 0xffd6f6
   },
-  { url: 'https://mrdoob.github.io/toys/', a: 0x230f4a, b: 0x8f3fd0, c: 0xf2dcff },
-  { url: 'https://maize.live', a: 0x2e0e4e, b: 0x8a34c8, c: 0xf6dcc8 }
+  { 
+    url: 'https://maize.live', 
+    name: 'Maize.Live', line: 'a gallery and a maze', 
+    a: 0x2e0e4e, b: 0x8a34c8, c: 0xf6dcc8
+  }, 
+  { 
+    url: 'https://flowline.games.bu.app', 
+    a: 0x2e0e4e, b: 0x8a34c8, c: 0xf6dcc8
+  },
+  { 
+    url: 'https://www.modernclaudefare.com', 
+    a: 0x2e0e4e, b: 0x8a34c8, c: 0xf6dcc8
+  },
+  { 
+    url: 'https://threejspunk.vercel.app', 
+    a: 0x2e0e4e, b: 0x8a34c8, c: 0xf6dcc8
+  },
+  { 
+    url: 'https://www.taken-game.com/play', 
+    a: 0x2e0e4e, b: 0x8a34c8, c: 0xf6dcc8
+  },
 ];
 
 const OPEN_W = 1.50;         // the gap you walk through
