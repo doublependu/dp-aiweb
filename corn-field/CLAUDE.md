@@ -54,7 +54,7 @@ things to notice, places to rest, texture and detail.
 - `src/weather.js` — cloud and rain. Owns one tiling noise texture that
   is both the cloud you see overhead and the shadow it casts, patched
   into every lit material in the scene from `main.js`.
-- `src/portals.js` — eight lit doorways set into the corn walls, each
+- `src/portals.js` — a lit doorway per destination, set into the corn walls, each
   one a link out to somebody else's web thing. Owns the destination
   list, the sheet shader, and the painted signs beside most of them.
 - `src/rng.js` — a seeded generator (mulberry32), so a field can be the

@@ -1,6 +1,6 @@
 // Doors in the corn.
 //
-// Eight of them, set flush into the corn walls and facing down the corridors,
+// One per destination, set flush into the corn walls and facing down corridors,
 // each one a way out of this field and into somebody else's. The reference is
 // the nether portal — a standing sheet of violet you can walk into — but that
 // one is a flat rectangle of scrolling noise, and this is a scene with weather
@@ -29,10 +29,15 @@
 import * as THREE from 'three';
 import { FINE, CELL, CLEARING_C, CLEARING_HALF, toWorld } from './maze.js';
 
-// The far side of each door. A destination with no `name` gets no sign: a box
-// of toys nobody labelled, and a field of maize reached from a field of maize.
-// Each carries its own three colours, so eight doors in one maze are eight
-// different violets rather than eight copies of one.
+// The far side of each door. Every one carries a name, a line and a painting,
+// because a door with no sign is a door you have to walk into to find out
+// about, and that is the one thing in the piece you cannot undo cheaply. (The
+// sign is still optional in the code — a destination added in a hurry with no
+// `name` gets a working door and no board, rather than a crash.)
+//
+// Each also carries its own three colours, so ten doors in one maze are ten
+// different lights rather than ten copies of one — mostly violets, but a door
+// is allowed to lean toward wherever it goes.
 export const DESTINATIONS = [
   {
     url: 'https://wave-racer.vercel.app',
@@ -59,26 +64,30 @@ export const DESTINATIONS = [
     name: 'Nuketown', line: 'a town, briefly', art: 'nuketown',
     a: 0x3a0d3a, b: 0xa733c0, c: 0xffd6f6
   },
-  { 
-    url: 'https://maize.live', 
-    name: 'Maize.Live', line: 'a gallery and a maze', 
-    a: 0x2e0e4e, b: 0x8a34c8, c: 0xf6dcc8
-  }, 
-  { 
-    url: 'https://flowline.games.bu.app', 
+  {
+    url: 'https://maize.live',
+    name: 'Maize.Live', line: 'a gallery and a maze', art: 'gallery',
     a: 0x2e0e4e, b: 0x8a34c8, c: 0xf6dcc8
   },
-  { 
-    url: 'https://www.modernclaudefare.com', 
-    a: 0x2e0e4e, b: 0x8a34c8, c: 0xf6dcc8
+  {
+    url: 'https://flowline.games.bu.app',
+    name: 'Flowline', line: 'an endless mountain', art: 'snow',
+    a: 0x14315e, b: 0x6f9fe8, c: 0xf2f8ff
   },
-  { 
-    url: 'https://threejspunk.vercel.app', 
-    a: 0x2e0e4e, b: 0x8a34c8, c: 0xf6dcc8
+  {
+    url: 'https://www.modernclaudefare.com',
+    name: 'Modern Claudefare', line: 'somebody else is already here', art: 'sights',
+    a: 0x2a0714, b: 0xc23a45, c: 0xffd2bc
   },
-  { 
-    url: 'https://www.taken-game.com/play', 
-    a: 0x2e0e4e, b: 0x8a34c8, c: 0xf6dcc8
+  {
+    url: 'https://threejspunk.vercel.app',
+    name: 'Threejs Punk', line: 'neon, and rain on it', art: 'neon',
+    a: 0x180a3e, b: 0x36c8d2, c: 0xffcdf2
+  },
+  {
+    url: 'https://www.taken-game.com/play',
+    name: 'Taken', line: 'another farm, worse nights', art: 'abduct',
+    a: 0x0a2018, b: 0x46b074, c: 0xdaffcf
   },
 ];
 
@@ -788,6 +797,267 @@ function paintPanel(g, art, r) {
     g.lineTo(x + w * 0.5, y + h);
     g.stroke();
     g.setLineDash([]);
+
+  } else if (art === 'gallery') {
+    // A room hung with pictures that carries on past the edge of the board,
+    // which is the only way to paint a gallery that is also a maze.
+    sky('#241a2e', '#3b2c42');
+    g.fillStyle = '#4a3550';
+    g.fillRect(x, y + h * 0.72, w, h * 0.28);
+    // walls running away, converging on a lit doorway at the back
+    g.fillStyle = '#2c2036';
+    g.beginPath();
+    g.moveTo(x, y); g.lineTo(x + w * 0.30, y + h * 0.24);
+    g.lineTo(x + w * 0.30, y + h * 0.80); g.lineTo(x, y + h);
+    g.closePath(); g.fill();
+    g.beginPath();
+    g.moveTo(x + w, y); g.lineTo(x + w * 0.70, y + h * 0.24);
+    g.lineTo(x + w * 0.70, y + h * 0.80); g.lineTo(x + w, y + h);
+    g.closePath(); g.fill();
+    g.fillStyle = 'rgba(255,232,190,0.30)';
+    g.fillRect(x + w * 0.42, y + h * 0.26, w * 0.16, h * 0.52);
+    // Frames hung on the two receding walls. Each is a trapezoid rather than a
+    // rectangle — squared-off frames sit on top of the perspective instead of
+    // in it, and the whole room goes flat.
+    const paint = ['#c96f6a', '#7fb0c4', '#d8a45a', '#8fae72', '#9a7fc4', '#e0cf9a'];
+    function onWall(side, t, f) {
+      const wx = side > 0 ? x + w * (1 - 0.30 * t) : x + w * 0.30 * t;
+      const top = y + h * 0.24 * t, bot = y + h * (1 - 0.20 * t);
+      return [wx, top + (bot - top) * f];
+    }
+    function quad(side, t0, t1, f0, f1, fill) {
+      const a = onWall(side, t0, f0), b = onWall(side, t1, f0);
+      const c = onWall(side, t1, f1), d = onWall(side, t0, f1);
+      g.fillStyle = fill;
+      g.beginPath();
+      g.moveTo(a[0], a[1]); g.lineTo(b[0], b[1]);
+      g.lineTo(c[0], c[1]); g.lineTo(d[0], d[1]);
+      g.closePath(); g.fill();
+    }
+    const runs = [[0.06, 0.34], [0.40, 0.64], [0.70, 0.90]];
+    for (let s = 0; s < 2; s++) {
+      const side = s ? 1 : -1;
+      for (let i = 0; i < runs.length; i++) {
+        const t0 = runs[i][0], t1 = runs[i][1];
+        quad(side, t0 - 0.015, t1 + 0.015, 0.27, 0.72, '#8a6a3e');
+        quad(side, t0, t1, 0.30, 0.69, paint[(i * 2 + s) % paint.length]);
+        // the near end of every picture catches the light from the doorway
+        quad(side, t0, t1, 0.30, 0.44, 'rgba(255,240,210,0.14)');
+      }
+    }
+
+  } else if (art === 'snow') {
+    // Sunlit and cold: the sky does most of the work, and the slope is one
+    // clean line with somebody on the end of it.
+    sky('#4f9fd8', '#bfe3f6');
+    g.fillStyle = 'rgba(255,246,206,0.9)';
+    g.beginPath();
+    g.arc(x + w * 0.82, y + h * 0.17, 20, 0, Math.PI * 2); g.fill();
+    // far peaks, then the near slope over the top of them
+    g.fillStyle = '#7f9ec4';
+    g.beginPath();
+    g.moveTo(x, y + h * 0.60);
+    g.lineTo(x + w * 0.18, y + h * 0.30); g.lineTo(x + w * 0.34, y + h * 0.58);
+    g.lineTo(x + w * 0.52, y + h * 0.24); g.lineTo(x + w * 0.72, y + h * 0.60);
+    g.lineTo(x + w, y + h * 0.40); g.lineTo(x + w, y + h); g.lineTo(x, y + h);
+    g.closePath(); g.fill();
+    g.fillStyle = '#fbfdff';
+    g.beginPath();
+    g.moveTo(x, y + h);
+    g.bezierCurveTo(x + w * 0.24, y + h * 0.64, x + w * 0.56, y + h * 0.86,
+                    x + w, y + h * 0.52);
+    g.lineTo(x + w, y + h); g.closePath(); g.fill();
+    // the line itself, carved across the slope and shadowed blue
+    g.strokeStyle = 'rgba(104,152,206,0.9)';
+    g.lineWidth = 9;
+    g.beginPath();
+    g.moveTo(x + w * 0.06, y + h * 1.02);
+    g.bezierCurveTo(x + w * 0.44, y + h * 0.86, x + w * 0.30, y + h * 0.74,
+                    x + w * 0.62, y + h * 0.66);
+    g.stroke();
+    g.fillStyle = '#20242c';
+    g.beginPath();
+    g.arc(x + w * 0.63, y + h * 0.54, 9, 0, Math.PI * 2); g.fill();
+    g.strokeStyle = '#20242c';
+    g.lineWidth = 8;
+    g.beginPath();
+    g.moveTo(x + w * 0.63, y + h * 0.60);
+    g.lineTo(x + w * 0.66, y + h * 0.72);
+    g.stroke();
+    g.save();
+    g.translate(x + w * 0.67, y + h * 0.76);
+    g.rotate(-0.34);
+    g.fillStyle = '#f4632e';
+    g.fillRect(-30, -4, 60, 9);
+    g.restore();
+
+  } else if (art === 'sights') {
+    // Down a corridor toward a lit doorway, with the near end of a rifle in
+    // the corner. A first-person view, painted from inside somebody's head.
+    sky('#14161c', '#22242c');
+    g.fillStyle = '#2b2e36';
+    g.beginPath();
+    g.moveTo(x, y); g.lineTo(x + w * 0.34, y + h * 0.26);
+    g.lineTo(x + w * 0.34, y + h * 0.82); g.lineTo(x, y + h);
+    g.closePath(); g.fill();
+    g.fillStyle = '#191c22';
+    g.beginPath();
+    g.moveTo(x + w, y); g.lineTo(x + w * 0.66, y + h * 0.26);
+    g.lineTo(x + w * 0.66, y + h * 0.82); g.lineTo(x + w, y + h);
+    g.closePath(); g.fill();
+    // the doorway, and the dust standing in the light out of it
+    const dg = g.createLinearGradient(0, y + h * 0.26, 0, y + h * 0.86);
+    dg.addColorStop(0, 'rgba(255,226,168,0.92)');
+    dg.addColorStop(1, 'rgba(255,196,120,0.55)');
+    g.fillStyle = dg;
+    g.fillRect(x + w * 0.44, y + h * 0.28, w * 0.14, h * 0.54);
+    for (let i = 0; i < 40; i++) {
+      g.fillStyle = 'rgba(255,232,190,' + (0.06 + Math.random() * 0.22) + ')';
+      g.beginPath();
+      g.arc(x + w * (0.36 + Math.random() * 0.30), y + h * (0.24 + Math.random() * 0.62),
+            1 + Math.random() * 2.6, 0, Math.PI * 2);
+      g.fill();
+    }
+    g.strokeStyle = 'rgba(232,240,255,0.55)';
+    g.lineWidth = 3;
+    g.beginPath();
+    g.moveTo(x + w * 0.51, y + h * 0.44); g.lineTo(x + w * 0.51, y + h * 0.52);
+    g.moveTo(x + w * 0.51, y + h * 0.60); g.lineTo(x + w * 0.51, y + h * 0.68);
+    g.moveTo(x + w * 0.45, y + h * 0.56); g.lineTo(x + w * 0.49, y + h * 0.56);
+    g.moveTo(x + w * 0.53, y + h * 0.56); g.lineTo(x + w * 0.57, y + h * 0.56);
+    g.stroke();
+    // The near end of a rifle, held up out of the bottom corner. Black on a
+    // black wall is nothing at all, so it is drawn as an edge catching the
+    // light from the doorway rather than as a shape.
+    g.fillStyle = '#0c0e12';
+    g.beginPath();
+    g.moveTo(x + w, y + h);
+    g.lineTo(x + w * 0.58, y + h);
+    g.lineTo(x + w * 0.84, y + h * 0.60);
+    g.lineTo(x + w, y + h * 0.48);
+    g.closePath(); g.fill();
+    g.strokeStyle = 'rgba(224,206,168,0.55)';
+    g.lineWidth = 3;
+    g.beginPath();
+    g.moveTo(x + w * 0.58, y + h);
+    g.lineTo(x + w * 0.84, y + h * 0.60);
+    g.lineTo(x + w, y + h * 0.48);
+    g.stroke();
+    g.strokeStyle = 'rgba(190,176,146,0.30)';
+    g.lineWidth = 2;
+    for (let i = 0; i < 3; i++) {
+      const f = 0.30 + i * 0.14;
+      g.beginPath();
+      g.moveTo(x + w * (0.60 + f * 0.40), y + h * (1.0 - f * 0.62));
+      g.lineTo(x + w * (0.68 + f * 0.40), y + h * (1.0 - f * 0.50));
+      g.stroke();
+    }
+
+  } else if (art === 'neon') {
+    // Wet city at night. Nearly all of the picture is the reflection.
+    sky('#0a0a1e', '#241452');
+    const lit = ['#2ee6f0', '#ff3ea5', '#ffd23e', '#7a5cff'];
+    // A haze low in the sky, so the blocks have something to be dark against.
+    // Without it the towers vanish and all that is left is floating confetti.
+    const hz = g.createLinearGradient(0, y + h * 0.30, 0, y + h * 0.68);
+    hz.addColorStop(0, 'rgba(120,40,150,0)');
+    hz.addColorStop(1, 'rgba(210,90,190,0.42)');
+    g.fillStyle = hz;
+    g.fillRect(x, y + h * 0.30, w, h * 0.38);
+    const blocks = [[0.02, 0.30], [0.16, 0.52], [0.30, 0.22], [0.46, 0.44],
+                    [0.62, 0.16], [0.76, 0.38], [0.90, 0.28]];
+    for (let i = 0; i < blocks.length; i++) {
+      const bx = x + w * blocks[i][0], bh = h * (0.22 + blocks[i][1]);
+      g.fillStyle = '#120f2c';
+      g.fillRect(bx, y + h * 0.66 - bh, w * 0.13, bh);
+      // a lit edge down the near corner, and windows in rows rather than
+      // scattered, because scattered dots read as stars in front of a building
+      g.fillStyle = 'rgba(150,120,230,0.35)';
+      g.fillRect(bx, y + h * 0.66 - bh, 2, bh);
+      for (let r = 0; r < 7; r++) {
+        for (let k = 0; k < 4; k++) {
+          if (Math.random() < 0.42) continue;
+          g.fillStyle = Math.random() < 0.78
+            ? 'rgba(150,190,230,' + (0.12 + Math.random() * 0.34) + ')'
+            : lit[(Math.random() * lit.length) | 0];
+          g.fillRect(bx + 7 + k * (w * 0.026), y + h * 0.66 - bh + 8 + r * (bh / 8), 5, 4);
+        }
+      }
+      // one sign per block, hung vertically down the front of it
+      g.fillStyle = lit[i % lit.length];
+      g.globalAlpha = 0.9;
+      g.fillRect(bx + w * 0.105, y + h * 0.66 - bh * 0.86, 5, bh * 0.52);
+      g.globalAlpha = 1;
+    }
+    // the street, and everything above it smeared down into it
+    g.fillStyle = '#0f0f26';
+    g.fillRect(x, y + h * 0.66, w, h * 0.34);
+    for (let i = 0; i < 26; i++) {
+      g.fillStyle = lit[(Math.random() * lit.length) | 0];
+      g.globalAlpha = 0.05 + Math.random() * 0.16;
+      g.fillRect(x + Math.random() * w, y + h * 0.66, 4 + Math.random() * 7,
+                 h * (0.06 + Math.random() * 0.28));
+      g.globalAlpha = 1;
+    }
+    g.strokeStyle = 'rgba(190,225,255,0.30)';
+    g.lineWidth = 1.6;
+    for (let i = 0; i < 90; i++) {
+      const rx = x + Math.random() * w, ry = y + Math.random() * h;
+      g.beginPath();
+      g.moveTo(rx, ry); g.lineTo(rx - 4, ry + 16 + Math.random() * 14);
+      g.stroke();
+    }
+
+  } else if (art === 'abduct') {
+    // The other farm. Corn at the bottom of the picture, so it reads as this
+    // field looked at from somewhere colder.
+    sky('#0a1526', '#16283c');
+    for (let i = 0; i < 70; i++) {
+      g.fillStyle = 'rgba(214,232,255,' + (0.2 + Math.random() * 0.6) + ')';
+      g.fillRect(x + Math.random() * w, y + Math.random() * h * 0.55,
+                 1.6, 1.6);
+    }
+    // the beam first, so the barn and the corn stand in front of it
+    const bg = g.createLinearGradient(0, y + h * 0.16, 0, y + h);
+    bg.addColorStop(0, 'rgba(150,255,190,0.55)');
+    bg.addColorStop(1, 'rgba(110,230,160,0.05)');
+    g.fillStyle = bg;
+    g.beginPath();
+    g.moveTo(x + w * 0.62, y + h * 0.20);
+    g.lineTo(x + w * 0.86, y + h);
+    g.lineTo(x + w * 0.40, y + h);
+    g.closePath(); g.fill();
+    g.fillStyle = 'rgba(206,255,224,0.92)';
+    g.beginPath();
+    g.ellipse(x + w * 0.64, y + h * 0.17, 46, 13, 0, 0, Math.PI * 2); g.fill();
+    g.fillStyle = '#8fd8ad';
+    g.beginPath();
+    g.ellipse(x + w * 0.64, y + h * 0.13, 24, 12, 0, Math.PI, 0); g.fill();
+    // barn and silo, black against it
+    g.fillStyle = '#0a1014';
+    g.fillRect(x + w * 0.08, y + h * 0.52, w * 0.22, h * 0.30);
+    g.beginPath();
+    g.moveTo(x + w * 0.06, y + h * 0.52); g.lineTo(x + w * 0.19, y + h * 0.40);
+    g.lineTo(x + w * 0.32, y + h * 0.52);
+    g.closePath(); g.fill();
+    g.fillRect(x + w * 0.34, y + h * 0.46, w * 0.07, h * 0.36);
+    g.beginPath();
+    g.arc(x + w * 0.375, y + h * 0.46, w * 0.035, Math.PI, 0);
+    g.closePath(); g.fill();
+    // the corn, a black comb across the bottom
+    g.fillStyle = '#060c0a';
+    g.fillRect(x, y + h * 0.82, w, h * 0.18);
+    g.strokeStyle = '#060c0a';
+    g.lineWidth = 3;
+    for (let i = 0; i < 64; i++) {
+      const cx = x + Math.random() * w;
+      const ch = h * (0.08 + Math.random() * 0.12);
+      g.beginPath();
+      g.moveTo(cx, y + h * 0.86);
+      g.quadraticCurveTo(cx + (Math.random() - 0.5) * 14, y + h * 0.86 - ch * 0.6,
+                         cx + (Math.random() - 0.5) * 22, y + h * 0.86 - ch);
+      g.stroke();
+    }
   }
 
   // Everything is painted on a board that has been out in the weather.
@@ -806,9 +1076,9 @@ function paintPanel(g, art, r) {
 // =============================================================
 // Against a wall, facing down a corridor, well apart from each other and from
 // both ends of the maze. Every destination has to get a door, so the spacing
-// is relaxed in passes rather than fixed: a maze that will not hold eight
-// portals twelve metres apart will hold eight portals six metres apart, and
-// eight doors close together is a better failure than seven doors.
+// is relaxed in passes rather than fixed: a maze that will not hold the whole
+// list twelve metres apart will hold it six metres apart, and doors standing
+// closer together is a better failure than a destination with no door.
 function chooseSpots(isOpen, rooms, entrance, exit, avoid, want) {
   const chosen = [];
   const used = {};
